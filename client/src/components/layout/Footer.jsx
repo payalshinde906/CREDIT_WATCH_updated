@@ -6,6 +6,8 @@ const columns = [
     links: [
       { label: 'Home', to: '/' },
       { label: 'About', to: '/about' },
+      { label: 'Dashboard', to: '/dashboard' },
+      { label: 'Membership', to: '/membership' },
       { label: 'Offerings', to: '/offerings' },
       { label: 'Contact', to: '/contact' },
     ],
@@ -13,10 +15,10 @@ const columns = [
   {
     title: 'Services',
     links: [
-      { label: 'Report Overdue Payer', to: '/services/report-overdue' },
-      { label: 'Credit Management', to: '/services/credit-management' },
-      { label: 'Partners Overdue Report', to: '/services/partners-report' },
-      { label: 'Finalization Steps', to: '/services/finalization' },
+      { label: 'Report Defaulters', to: '/defaulters' },
+      { label: 'Purchase Orders', to: '/purchase-orders' },
+      { label: 'Credit Reports', to: '/credit-reports' },
+      { label: 'Settlement', to: '/settlement' },
     ],
   },
   {

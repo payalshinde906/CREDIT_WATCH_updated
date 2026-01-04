@@ -45,6 +45,10 @@ credit-data-watch/
 - React Router for navigation
 - Responsive design
 - Component-based architecture
+- JWT cookie-based authentication
+- Google Drive integration for document management
+- Phone OTP verification
+- Multi-tier subscription plans
 
 ## Available Routes
 

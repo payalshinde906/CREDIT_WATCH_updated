@@ -3,24 +3,24 @@ import { motion, AnimatePresence } from 'framer-motion'
 
 const faqs = [
   {
-    q: 'What is a business credit score?',
-    a: 'A composite indicator derived from trade history, payment punctuality, and statutory compliance. CreditDataWatch will surface bureau-grade insights alongside your verified trade lines.',
+    q: 'What Goes Into Your Credit Score?',
+    a: 'Think of a credit score as a numerical summary of your payment habits. It is a three-digit number that tells suppliers how reliable you are based on your past transactions. The score is calculated using an intelligent algorithm that evaluates key financial factors for businesses and individuals alike.',
   },
   {
-    q: 'Registration vs Subscription?',
-    a: 'Registration (GST validation) is mandatory to access the platform. Subscription unlocks continued access, periodic reporting, analytics, and workflow automation.',
+    q: 'Best Practices for Credit Score Enhancement?',
+    a: '1. Punctuality: Pay all bills on or before the due date. 2. Resolution: Clear any outstanding dues listed on CreditDataWatch. 3. Trust: Foster strong connections with your creditors. Master these three areas to unlock a higher credit score.',
   },
   {
-    q: 'Is GST mandatory?',
-    a: 'Yes. Only GST-registered entities can use CreditDataWatch. GSTIN is validated during sign-up and periodically rechecked.',
+    q: 'What additional benefits come with a Subscription?',
+    a: 'Think of Registration as getting your ID card—it creates your account using your personal details. Subscription is like paying your monthly dues—it ensures you keep receiving the service, content, or premium access you need over time.',
   },
   {
-    q: 'Best practices for faster collections?',
-    a: 'File overdue invoices early, attach POs and delivery proofs, keep acknowledgement trails, and use structured reminder cadences instead of ad-hoc emails.',
+    q: 'Is GST registration a mandatory prerequisite for accessing Credit-Data-Watch services?',
+    a: 'Access to Credit-Data-Watch services is restricted to GST-registered entities only. Please ensure your organization possesses a valid GSTIN before proceeding.',
   },
   {
-    q: 'How do I register? (video)',
-    a: 'Watch the 2-minute walkthrough on YouTube to see GST validation, overdue filing, and appointment booking. (Placeholder link: https://youtu.be/demo-creditdatawatch)',
+    q: 'What is the procedure for registering on the Credit-Data-Watch platform?',
+    a: 'Credit-Data-Watch is an easy-to-use platform available exclusively to users with a valid GST Number. Please watch the Demo for more details.',
   },
 ]
 

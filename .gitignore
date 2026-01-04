@@ -14,3 +14,13 @@ coverage/
 *.sln
 *.sw?
 all standards.txt
+venv/
+__pycache__/
+server/service-account.json
+server/credentials/
+CreditDataWatch (2).docx
+CreditDataWatch (2).txt
+Usage Policy.docx
+Usage Policy.txt
+Your Privacy Rights.docx
+Your Privacy Rights.txt

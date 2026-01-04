@@ -1,14 +1,50 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { isValidGstin } from '../../utils/validation'
+import authService from '../../services/authService'
 
 export default function Login() {
+  const navigate = useNavigate()
   const [form, setForm] = useState({ email: '', password: '', gstin: '' })
+  const [status, setStatus] = useState({ type: '', message: '' })
+  const [submitting, setSubmitting] = useState(false)
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value })
-  const handleSubmit = (e) => {
+  
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    alert('Login submitted (stub). GST validation pending backend integration.')
+    setStatus({ type: '', message: '' })
+    
+    if (!isValidGstin(form.gstin)) {
+      setStatus({ type: 'error', message: 'Enter a valid GSTIN' })
+      return
+    }
+    if (!form.password || form.password.length < 6) {
+      setStatus({ type: 'error', message: 'Password must be at least 6 characters' })
+      return
+    }
+    
+    setSubmitting(true)
+    try {
+      const response = await authService.login({
+        email: form.email,
+        password: form.password,
+        gstin: form.gstin,
+      })
+      
+      if (response.ok) {
+        setStatus({ type: 'success', message: 'Login successful! Redirecting...' })
+        // Redirect to dashboard after short delay
+        setTimeout(() => navigate('/dashboard'), 500)
+      } else {
+        setStatus({ type: 'error', message: response.error || 'Login failed' })
+      }
+    } catch (error) {
+      setStatus({ type: 'error', message: 'Network error: ' + error.message })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -23,6 +59,13 @@ export default function Login() {
           <p className="text-gray-600">GST-registered entities only</p>
         </div>
         <div className="card">
+          {status.message && (
+            <div className={`mb-4 rounded-lg px-4 py-3 text-sm font-semibold ${
+              status.type === 'error' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+            }`}>
+              {status.message}
+            </div>
+          )}
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="email" className="text-sm font-semibold text-gray-700">Work Email</label>
@@ -61,7 +104,23 @@ export default function Login() {
               />
               <p className="text-xs text-gray-500 mt-1">GSTIN will be validated during login.</p>
             </div>
-            <button type="submit" className="btn-primary w-full">Sign In</button>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 block text-sm text-gray-700">
+                  Remember me
+                </label>
+              </div>
+              <Link to="/auth/forgot-password" className="text-sm text-primary-600 hover:text-primary-700 font-semibold">
+                Forgot password?
+              </Link>
+            </div>
+            <button type="submit" className="btn-primary w-full disabled:opacity-60" disabled={submitting}>
+              {submitting ? 'Signing in...' : 'Sign In'}
+            </button>
           </form>
           <p className="text-sm text-gray-600 mt-4 text-center">
             New here? <Link to="/auth/register" className="text-primary-700 font-semibold">Create an account</Link>

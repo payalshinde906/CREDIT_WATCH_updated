@@ -1,0 +1,185 @@
+/**
+ * Authentication Service
+ * 
+ * Manages user authentication state and API interactions
+ * No localStorage - all tokens are httpOnly cookies managed by the browser
+ */
+
+import { auth, user as userApi } from './api/apiClient'
+
+/**
+ * Register a new user
+ * @param {object} userData - { company_name, email, password, phone, gstin }
+ * @returns {Promise<{ok: boolean, data?: object, error?: string}>}
+ */
+export async function register(userData) {
+  return auth.register({
+    company_name: userData.company_name || userData.company,
+    email: userData.email,
+    password: userData.password,
+    phone: userData.phone,
+    gstin: userData.gstin,
+  })
+}
+
+/**
+ * Login user with credentials
+ * @param {object} credentials - { email, password, gstin }
+ * @returns {Promise<{ok: boolean, data?: {user, token_type, expires_in}, error?: string}>}
+ */
+export async function login(credentials) {
+  return auth.login({
+    email: credentials.email,
+    password: credentials.password,
+    gstin: credentials.gstin,
+  })
+}
+
+/**
+ * Logout current user (clears server-side cookies)
+ * @returns {Promise<{ok: boolean}>}
+ */
+export async function logout() {
+  return auth.logout()
+}
+
+/**
+ * Send OTP for password reset
+ * @param {string} email - Email address
+ * @returns {Promise<{ok: boolean, message?: string, error?: string}>}
+ */
+export async function sendPasswordResetOtp(email) {
+  return auth.sendPasswordResetOtp({ email })
+}
+
+/**
+ * Verify password reset OTP
+ * @param {string} email - Email address
+ * @param {string} otp_code - OTP code
+ * @returns {Promise<{ok: boolean, error?: string}>}
+ */
+export async function verifyPasswordResetOtp(email, otp_code) {
+  return auth.verifyPasswordResetOtp({ email, otp_code })
+}
+
+/**
+ * Reset password with verified OTP
+ * @param {string} email - Email address
+ * @param {string} otp_code - Verified OTP code
+ * @param {string} password - New password
+ * @returns {Promise<{ok: boolean, error?: string}>}
+ */
+export async function resetPassword(email, otp_code, password) {
+  return auth.resetPassword({ email, otp_code, password })
+}
+
+/**
+ * Get current user's profile (requires valid access token cookie)
+ * @returns {Promise<{ok: boolean, data?: object, error?: string}>}
+ */
+export async function getCurrentUser() {
+  return userApi.getProfile()
+}
+
+/**
+ * Update user profile
+ * @param {object} updates - { company_name?, email?, phone? }
+ * @returns {Promise<{ok: boolean, data?: object, error?: string}>}
+ */
+export async function updateProfile(updates) {
+  return userApi.updateProfile(updates)
+}
+
+/**
+ * Get user's subscription info
+ * @returns {Promise<{ok: boolean, data?: {id, plan, is_active, start_date, expiry_date}, error?: string}>}
+ */
+export async function getSubscription() {
+  return userApi.getSubscription()
+}
+
+/**
+ * Send OTP for phone number verification (registration flow)
+ * @param {string} phone - E.164 format phone number
+ * @returns {Promise<{ok: boolean, message?: string, error?: string}>}
+ */
+export async function sendPhoneOtp(phone) {
+  return auth.sendOtp({
+    phone,
+    reason: 'phone_verification',
+  })
+}
+
+/**
+ * Verify phone OTP (registration flow)
+ * @param {string} phone - E.164 format phone number
+ * @param {string} otp_code - OTP code (6 digits)
+ * @returns {Promise<{ok: boolean, error?: string}>}
+ */
+export async function verifyPhoneOtp(phone, otp_code) {
+  return auth.verifyOtp({
+    phone,
+    otp_code,
+  })
+}
+
+/**
+ * Start phone change process (account settings)
+ * @param {string} new_phone - E.164 format phone number
+ * @returns {Promise<{ok: boolean, message?: string, error?: string}>}
+ */
+export async function sendPhoneChangeOtp(new_phone) {
+  return userApi.sendPhoneChangeOtp({
+    new_phone,
+  })
+}
+
+/**
+ * Verify OTP and update phone number (account settings)
+ * @param {string} new_phone - E.164 format phone number
+ * @param {string} otp_code - OTP code (6 digits)
+ * @returns {Promise<{ok: boolean, data?: object, error?: string}>}
+ */
+export async function verifyPhoneChangeOtp(new_phone, otp_code) {
+  return userApi.verifyPhoneChangeOtp({
+    new_phone,
+    otp_code,
+  })
+}
+
+/**
+ * Check if user is currently authenticated
+ * Attempts to fetch user profile - returns true if successful
+ * @returns {Promise<boolean>}
+ */
+export async function isAuthenticated() {
+  const response = await getCurrentUser()
+  return response.ok
+}
+
+/**
+ * Refresh access token (called automatically by apiClient on 401)
+ * @returns {Promise<boolean>} - true if refresh succeeded
+ */
+export async function refreshToken() {
+  const response = await auth.refreshToken()
+  return response === true // refreshAccessToken returns boolean directly
+}
+
+export default {
+  register,
+  login,
+  logout,
+  getCurrentUser,
+  updateProfile,
+  getSubscription,
+  sendPhoneOtp,
+  verifyPhoneOtp,
+  sendPhoneChangeOtp,
+  verifyPhoneChangeOtp,
+  isAuthenticated,
+  refreshToken,
+  sendPasswordResetOtp,
+  verifyPasswordResetOtp,
+  resetPassword,
+}

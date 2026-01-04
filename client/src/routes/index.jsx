@@ -22,6 +22,18 @@ import BusinessDebt from '../pages/solutions/BusinessDebt'
 import AuthLanding from '../pages/auth/AuthLanding'
 import Login from '../pages/auth/Login'
 import Register from '../pages/auth/Register'
+import ForgotPassword from '../pages/auth/ForgotPassword'
+import Dashboard from '../pages/Dashboard'
+import Membership from '../pages/Membership'
+import PurchaseOrders from '../pages/PurchaseOrders'
+import Invoices from '../pages/Invoices'
+import Defaulters from '../pages/Defaulters'
+import CreditReports from '../pages/CreditReports'
+import Settlement from '../pages/Settlement'
+import Privacy from '../pages/Privacy'
+import Terms from '../pages/Terms'
+import Account from '../pages/account/Account'
+import ProtectedRoute from '../components/ProtectedRoute'
 
 export default function AppRoutes() {
   return (
@@ -44,6 +56,65 @@ export default function AppRoutes() {
         <Route path="offerings" element={<Offerings />} />
         <Route path="contact" element={<Contact />} />
         <Route path="appointment" element={<Appointment />} />
+        <Route
+          path="account"
+          element={(
+            <ProtectedRoute>
+              <Account />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="dashboard"
+          element={(
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          )}
+        />
+        <Route path="membership" element={<Membership />} />
+        <Route
+          path="purchase-orders"
+          element={(
+            <ProtectedRoute requiredFeature="PO_MANAGEMENT">
+              <PurchaseOrders />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="invoices"
+          element={(
+            <ProtectedRoute requiredFeature="CREDIT_MANAGEMENT">
+              <Invoices />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="defaulters"
+          element={(
+            <ProtectedRoute requiredFeature="REPORT_OVERDUE">
+              <Defaulters />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="credit-reports"
+          element={(
+            <ProtectedRoute requiredFeature="CREDIT_REPORTS">
+              <CreditReports />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="settlement"
+          element={(
+            <ProtectedRoute requiredFeature="SETTLEMENT">
+              <Settlement />
+            </ProtectedRoute>
+          )}
+        />
+        <Route path="privacy" element={<Privacy />} />
+        <Route path="terms" element={<Terms />} />
 
         <Route path="*" element={<NotFound />} />
       </Route>
@@ -51,6 +122,7 @@ export default function AppRoutes() {
       <Route path="auth" element={<AuthLanding />} />
       <Route path="auth/login" element={<Login />} />
       <Route path="auth/register" element={<Register />} />
+      <Route path="auth/forgot-password" element={<ForgotPassword />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   )

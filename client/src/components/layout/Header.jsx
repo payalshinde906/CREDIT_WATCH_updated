@@ -3,9 +3,11 @@ import { Link, NavLink } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 
 const navLinks = [
+  { label: 'Dashboard', to: '/dashboard' },
   { label: 'About', to: '/about' },
   { label: 'Services', to: '/services' },
   { label: 'Solutions', to: '/solutions' },
+  { label: 'Membership', to: '/membership' },
   { label: 'Offerings', to: '/offerings' },
   { label: 'Contact', to: '/contact' },
 ]
