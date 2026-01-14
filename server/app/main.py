@@ -10,7 +10,8 @@ import logging
 from app.config import settings
 from app.database import engine, Base
 from app.middleware import ErrorHandlerMiddleware, RequestIDMiddleware, RateLimitMiddleware
-from app.routes import auth, drive, core, admin, subscriptions, business_profile, invoices, appointments, contact
+from app.routes import auth, drive, core, admin, subscriptions, business_profile, invoices, appointments, contact, wallet
+from app.routes import cms
 
 # Configure logging
 logging.basicConfig(
@@ -53,10 +54,7 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
-# Middleware
-app.add_middleware(ErrorHandlerMiddleware)
-app.add_middleware(RequestIDMiddleware)
-app.add_middleware(RateLimitMiddleware)
+# Middleware (CORS must be first to add headers to all responses including errors)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -64,6 +62,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(ErrorHandlerMiddleware)
+app.add_middleware(RequestIDMiddleware)
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
 
 # API prefix constant
@@ -82,7 +83,9 @@ app.include_router(contact.router, prefix=API_PREFIX, tags=["Contact"])
 app.include_router(subscriptions.router, prefix=API_PREFIX, tags=["Subscriptions"])
 app.include_router(business_profile.router, prefix=API_PREFIX, tags=["Account"])
 app.include_router(drive.router, prefix=f"{API_PREFIX}/drive", tags=["Google Drive"])
+app.include_router(wallet.router, prefix=API_PREFIX, tags=["Wallet"])
 app.include_router(admin.router, prefix=f"{API_PREFIX}/admin", tags=["Admin"])
+app.include_router(cms.router, prefix=API_PREFIX, tags=["CMS"])
 
 
 @app.get("/health")

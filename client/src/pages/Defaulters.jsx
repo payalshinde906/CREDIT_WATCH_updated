@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { defaulters } from '../services/api/apiClient'
+import { defaulters, drive } from '../services/api/apiClient'
 import { isValidGstin } from '../utils/validation'
 import { useAuth } from '../state/authContext'
 
@@ -9,6 +9,7 @@ export default function Defaulters() {
   const [rows, setRows] = useState([])
   const [statusMsg, setStatusMsg] = useState('')
   const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
   const [form, setForm] = useState({ business_name: '', business_gstin: '', pan: '', amount: '', invoice_number: '', due_date: '', notes: '', documents_drive_folder: '', ledger_url: '', ca_certificate_url: '' })
   const [selectedCase, setSelectedCase] = useState(null)
   const [docUpdate, setDocUpdate] = useState({ drive_folder_id: '', ledger_url: '', ca_certificate_url: '' })
@@ -60,6 +61,33 @@ export default function Defaulters() {
       return
     }
 
+
+    setUploading(true)
+    let ledgerUrl = form.ledger_url
+    let caUrl = form.ca_certificate_url
+
+    try {
+      if (form.ledger_file) {
+        const fd = new FormData()
+        fd.append('file', form.ledger_file)
+        const upRes = await drive.upload(fd)
+        if (upRes.ok) ledgerUrl = upRes.data.webViewLink
+        else throw new Error('Failed to upload Ledger: ' + upRes.error)
+      }
+
+      if (form.ca_file) {
+        const fd = new FormData()
+        fd.append('file', form.ca_file)
+        const upRes = await drive.upload(fd)
+        if (upRes.ok) caUrl = upRes.data.webViewLink
+        else throw new Error('Failed to upload CA Certificate: ' + upRes.error)
+      }
+    } catch (err) {
+      setUploading(false)
+      setStatusMsg(err.message)
+      return
+    }
+
     const payload = {
       business_name: form.business_name.trim(),
       business_gstin: form.business_gstin.trim().toUpperCase(),
@@ -69,9 +97,11 @@ export default function Defaulters() {
       due_date: form.due_date,
       notes: form.notes || '',
       documents_drive_folder: form.documents_drive_folder || '',
-      ledger_url: form.ledger_url || '',
-      ca_certificate_url: form.ca_certificate_url || '',
+      ledger_url: ledgerUrl || '',
+      ca_certificate_url: caUrl || '',
     }
+
+    setUploading(false)
 
     const res = await defaulters.create(payload)
     if (!res.ok) {
@@ -210,6 +240,25 @@ export default function Defaulters() {
                 placeholder="Remarks (optional)"
                 rows={3}
               />
+              <div className="grid md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-gray-600">Ledger (PDF/Excel)</label>
+                  <input
+                    type="file"
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                    onChange={(e) => setForm(prev => ({ ...prev, ledger_file: e.target.files[0] }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-gray-600">CA Certificate (PDF)</label>
+                  <input
+                    type="file"
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                    onChange={(e) => setForm(prev => ({ ...prev, ca_file: e.target.files[0] }))}
+                  />
+                </div>
+              </div>
+
               <input
                 className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                 name="documents_drive_folder"
@@ -217,24 +266,9 @@ export default function Defaulters() {
                 onChange={handleChange}
                 placeholder="Drive folder ID or link (optional)"
               />
-              <div className="grid md:grid-cols-2 gap-3">
-                <input
-                  className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
-                  name="ledger_url"
-                  value={form.ledger_url}
-                  onChange={handleChange}
-                  placeholder="Ledger URL (optional)"
-                />
-                <input
-                  className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
-                  name="ca_certificate_url"
-                  value={form.ca_certificate_url}
-                  onChange={handleChange}
-                  placeholder="CA Certificate URL (optional)"
-                />
-              </div>
-              <button type="submit" className="btn-primary" disabled={!allowed}>
-                {allowed ? 'Submit defaulter' : 'Upgrade to submit'}
+
+              <button type="submit" className="btn-primary" disabled={!allowed || uploading}>
+                {uploading ? 'Uploading Files...' : (allowed ? 'Submit defaulter' : 'Upgrade to submit')}
               </button>
             </form>
           </div>

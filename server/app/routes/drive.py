@@ -1,7 +1,7 @@
 """
 Google Drive routes
 """
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.services import DriveService
@@ -22,7 +22,7 @@ async def get_drive_auth_url(http_request: Request = None):
     try:
         auth_url = DriveService.get_authorization_url()
         request_id = http_request.state.request_id if http_request else ""
-        return ResponseFormatter.success(
+        return ResponseFormatter.create_success(
             data={"auth_url": auth_url},
             message="Authorization URL generated",
             request_id=request_id
@@ -38,7 +38,7 @@ async def drive_oauth_callback(code: str, state: str, current_user: User = Depen
     try:
 
         request_id = http_request.state.request_id if http_request else ""
-        return ResponseFormatter.success(
+        return ResponseFormatter.create_success(
             message="Drive connected successfully",
             request_id=request_id
         )
@@ -58,10 +58,45 @@ async def list_drive_files(current_user: User = Depends(get_current_user), http_
         ]
 
         request_id = http_request.state.request_id if http_request else ""
-        return ResponseFormatter.success(
+        return ResponseFormatter.create_success(
             data={"files": files},
             request_id=request_id
         )
     except Exception as e:
         logger.error(f"Error listing files: {str(e)}")
+        raise
+
+
+@router.post("/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    folder_id: str = Form(None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    http_request: Request = None
+):
+    """Upload file to Google Drive (System Account)"""
+    try:
+        # Use Service Account credentials
+        creds = DriveService.get_service_account_credentials()
+        
+        target_folder_id = folder_id or settings.GOOGLE_FOLDER_ID
+        
+        # Upload
+        result = await DriveService.upload_file(
+            file_obj=file.file,
+            filename=file.filename,
+            mime_type=file.content_type,
+            credentials=creds,
+            folder_id=target_folder_id
+        )
+        
+        request_id = http_request.state.request_id if http_request else ""
+        return ResponseFormatter.create_success(
+            data=result,
+            message="File uploaded successfully",
+            request_id=request_id
+        )
+    except Exception as e:
+        logger.error(f"Error uploading file: {str(e)}")
         raise

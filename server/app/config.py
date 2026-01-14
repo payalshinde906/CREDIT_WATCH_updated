@@ -33,6 +33,7 @@ class Settings(BaseSettings):
 
     # Google Drive OAuth2
     GOOGLE_CLIENT_CREDENTIALS_FILE: str = "server/credentials/client-credentials.json"
+    GOOGLE_SERVICE_ACCOUNT_FILE: str = "server/credentials/service-account.json"
     GOOGLE_FOLDER_ID: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/drive/callback"
 
@@ -50,6 +51,13 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
     ENVIRONMENT: str = "development"
+
+    # Admin Configuration (for seeding initial admin user)
+    ADMIN_GSTIN: str = ""
+    ADMIN_EMAIL: str = ""
+    ADMIN_PASSWORD: str = ""
+    ADMIN_COMPANY_NAME: str = ""
+    ADMIN_PHONE: str = ""
 
     class Config:
         env_file = ".env"

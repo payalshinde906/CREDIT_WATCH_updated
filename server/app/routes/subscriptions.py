@@ -17,6 +17,36 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/subscriptions", tags=["Subscriptions"])
 
 
+@router.get("/plans", response_model=dict)
+async def list_plans(db: AsyncSession = Depends(get_db)):
+    """List all membership plans (public)"""
+    try:
+        from app.models import Plan
+        from sqlalchemy import select
+        
+        stmt = select(Plan).where(Plan.is_active == True).order_by(Plan.price)
+        result = await db.execute(stmt)
+        plans = result.scalars().all()
+        
+        return ResponseFormatter.create_success(
+            data=[{
+                "id": p.id,
+                "name": p.name,
+                "display_name": p.display_name,
+                "description": p.description,
+                "price": p.price,
+                "validity_days": p.validity_days,
+                "features": {
+                    "follow_up_limit": p.follow_up_limit,
+                    "legal_assistance_limit": p.legal_assistance_limit,
+                }
+            } for p in plans]
+        )
+    except Exception as e:
+        logger.error(f"Error in list_plans: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("", response_model=dict)
 async def purchase_subscription(
     request: SubscriptionRequest,
@@ -43,7 +73,7 @@ async def purchase_subscription(
         
         await db.commit()
         
-        return ResponseFormatter.success(
+        return ResponseFormatter.create_success(
             message="Subscription purchased successfully",
             data={
                 "subscription_id": subscription.id,
@@ -121,7 +151,7 @@ async def get_subscription_status(
                 "expiry_date": expiry_isoformat,
             }
         
-        return ResponseFormatter.success(
+        return ResponseFormatter.create_success(
             message="Subscription status retrieved",
             data={
                 "has_active_subscription": has_active,
@@ -168,7 +198,7 @@ async def get_subscription_details(
                 detail="Unauthorized to view this subscription",
             )
         
-        return ResponseFormatter.success(
+        return ResponseFormatter.create_success(
             message="Subscription details retrieved",
             data={
                 "id": subscription.id,

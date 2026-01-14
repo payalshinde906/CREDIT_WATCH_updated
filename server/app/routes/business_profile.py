@@ -4,6 +4,7 @@ Business Profile management routes
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
+from app.models import User
 from app.schemas.business_profile import (
     BusinessProfileResponse,
     BusinessProfileUpdateRequest,
@@ -23,7 +24,7 @@ router = APIRouter(prefix="/account", tags=["Account"])
 
 @router.get("/profile", response_model=dict)
 async def get_profile(
-    current_user: dict = Depends(get_current_user),
+    current_user: "User" = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -38,11 +39,11 @@ async def get_profile(
     """
     try:
         profile = await BusinessProfileService.get_profile(
-            user_id=current_user["id"],
+            user_id=current_user.id,
             db=db,
         )
         
-        return ResponseFormatter.success(
+        return ResponseFormatter.create_success(
             message="Profile retrieved",
             data={
                 "id": profile.id,
@@ -74,7 +75,7 @@ async def get_profile(
 @router.put("/profile", response_model=dict)
 async def update_profile(
     request: BusinessProfileUpdateRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: "User" = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -92,14 +93,14 @@ async def update_profile(
         updates = request.dict(exclude_unset=True)
         
         profile = await BusinessProfileService.update_profile(
-            user_id=current_user["id"],
+            user_id=current_user.id,
             updates=updates,
             db=db,
         )
         
         await db.commit()
         
-        return ResponseFormatter.success(
+        return ResponseFormatter.create_success(
             message="Profile updated successfully",
             data={
                 "id": profile.id,
@@ -124,7 +125,7 @@ async def update_profile(
 @router.post("/profile-photo", response_model=dict)
 async def upload_profile_photo(
     file_request: FileUploadRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: "User" = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -140,14 +141,14 @@ async def upload_profile_photo(
     """
     try:
         profile = await BusinessProfileService.set_profile_photo(
-            user_id=current_user["id"],
+            user_id=current_user.id,
             photo_url=file_request.drive_url,
             db=db,
         )
         
         await db.commit()
         
-        return ResponseFormatter.success(
+        return ResponseFormatter.create_success(
             message="Profile photo updated",
             data={"profile_photo_url": profile.profile_photo_url},
         )
@@ -163,7 +164,7 @@ async def upload_profile_photo(
 @router.post("/company-logo", response_model=dict)
 async def upload_company_logo(
     file_request: FileUploadRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: "User" = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -179,14 +180,14 @@ async def upload_company_logo(
     """
     try:
         profile = await BusinessProfileService.set_company_logo(
-            user_id=current_user["id"],
+            user_id=current_user.id,
             logo_url=file_request.drive_url,
             db=db,
         )
         
         await db.commit()
         
-        return ResponseFormatter.success(
+        return ResponseFormatter.create_success(
             message="Company logo updated",
             data={"company_logo_url": profile.company_logo_url},
         )

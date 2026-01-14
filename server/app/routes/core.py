@@ -2,6 +2,7 @@
 User and feature routes (stub with core endpoints)
 """
 from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime, timezone
@@ -39,13 +40,18 @@ user_router = APIRouter()
 @user_router.get("/profile")
 async def get_profile(current_user: User = Depends(get_current_user)):
     """Get current user profile"""
-    return ResponseFormatter.success(data=UserProfileResponse.model_validate(current_user).__dict__)
+    return ResponseFormatter.create_success(data=UserProfileResponse.model_validate(current_user).__dict__)
+
+@user_router.options("/profile")
+async def profile_options():
+    # Empty response; CORSMiddleware will add CORS headers
+    return JSONResponse(content={})
 
 @user_router.put("/profile")
 async def update_profile(req: UpdateProfileRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Update user profile"""
     user = await UserService.update_profile(current_user.id, req, db)
-    return ResponseFormatter.success(data=UserProfileResponse.model_validate(user).__dict__)
+    return ResponseFormatter.create_success(data=UserProfileResponse.model_validate(user).__dict__)
 
 @user_router.post("/phone-change/send-otp")
 async def send_phone_change_otp(req: dict, current_user: User = Depends(get_current_user)):
@@ -55,7 +61,7 @@ async def send_phone_change_otp(req: dict, current_user: User = Depends(get_curr
         from app.exceptions import InvalidPhone
         raise InvalidPhone()
     result = await OTPService.send_otp(new_phone, "phone_change")
-    return ResponseFormatter.success(data={"sent": result["sent"]})
+    return ResponseFormatter.create_success(data={"sent": result["sent"]})
 
 @user_router.post("/phone-change/verify-otp")
 async def verify_phone_change_otp(req: dict, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
@@ -65,18 +71,19 @@ async def verify_phone_change_otp(req: dict, current_user: User = Depends(get_cu
     await OTPService.verify_otp(new_phone, otp_code)
     phone_e164 = format_phone_e164(new_phone) or new_phone
     await UserService.change_phone(current_user.id, phone_e164, db)
-    return ResponseFormatter.success(message="Phone changed successfully")
+    return ResponseFormatter.create_success(message="Phone changed successfully")
 
 @user_router.get("/subscription")
 async def get_subscription(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Get user subscription"""
-    stmt = select(type(current_user.subscription)).where(type(current_user.subscription).user_id == current_user.id)
+    from app.models import Subscription
+    stmt = select(Subscription).where(Subscription.user_id == current_user.id)
     result = await db.execute(stmt)
     sub = result.scalars().first()
     if not sub:
-        from app.exceptions import SubscriptionNotFound
-        raise SubscriptionNotFound()
-    return ResponseFormatter.success(data=SubscriptionResponse.model_validate(sub).__dict__)
+        # User has no subscription yet - this is OK for new users
+        return ResponseFormatter.create_success(data=None)
+    return ResponseFormatter.create_success(data=SubscriptionResponse.model_validate(sub).__dict__)
 
 # Purchase Order routes
 po_router = APIRouter()
@@ -98,7 +105,7 @@ async def create_po(req: dict, current_user: User = Depends(get_current_user), d
     )
     db.add(po)
     await db.commit()
-    return ResponseFormatter.success(data={"id": po.id}, message="PO created")
+    return ResponseFormatter.create_success(data={"id": po.id}, message="PO created")
 
 @po_router.get("")
 async def list_pos(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db), skip: int = 0, limit: int = 20, include_archived: bool = False):
@@ -109,7 +116,7 @@ async def list_pos(current_user: User = Depends(get_current_user), db: AsyncSess
     stmt = stmt.offset(skip).limit(limit).order_by(PurchaseOrder.created_at.desc())
     result = await db.execute(stmt)
     pos = result.scalars().all()
-    return ResponseFormatter.success(data=[{
+    return ResponseFormatter.create_success(data=[{
         "id": p.id, 
         "number": p.number, 
         "vendor_name": p.vendor_name, 
@@ -130,7 +137,7 @@ async def get_po(po_id: str, current_user: User = Depends(get_current_user), db:
     po = result.scalars().first()
     if not po:
         raise HTTPException(status_code=404, detail=PO_NOT_FOUND_ERROR)
-    return ResponseFormatter.success(data={
+    return ResponseFormatter.create_success(data={
         "id": po.id,
         "number": po.number,
         "vendor_name": po.vendor_name,
@@ -177,7 +184,7 @@ async def update_po(po_id: str, req: dict, current_user: User = Depends(get_curr
     
     po.updated_at = datetime.now(timezone.utc)
     await db.commit()
-    return ResponseFormatter.success(data={"id": po.id}, message="PO updated successfully")
+    return ResponseFormatter.create_success(data={"id": po.id}, message="PO updated successfully")
 
 @po_router.delete("/{po_id}")
 async def delete_po(po_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
@@ -193,7 +200,7 @@ async def delete_po(po_id: str, current_user: User = Depends(get_current_user), 
     
     await db.delete(po)
     await db.commit()
-    return ResponseFormatter.success(message="PO deleted successfully")
+    return ResponseFormatter.create_success(message="PO deleted successfully")
 
 @po_router.post("/{po_id}/archive")
 async def archive_po(po_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
@@ -207,7 +214,7 @@ async def archive_po(po_id: str, current_user: User = Depends(get_current_user),
     po.is_archived = not po.is_archived
     po.updated_at = datetime.now(timezone.utc)
     await db.commit()
-    return ResponseFormatter.success(data={"is_archived": po.is_archived}, message="PO archive status updated")
+    return ResponseFormatter.create_success(data={"is_archived": po.is_archived}, message="PO archive status updated")
 
 # Defaulter routes
 defaulter_router = APIRouter()
@@ -242,7 +249,7 @@ async def file_defaulter(req: dict, current_user: User = Depends(get_current_use
     )
     db.add(case)
     await db.commit()
-    return ResponseFormatter.success(data={"id": case.id}, message="Defaulter case filed")
+    return ResponseFormatter.create_success(data={"id": case.id}, message="Defaulter case filed")
 
 @defaulter_router.get("")
 async def list_defaulters(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
@@ -271,7 +278,7 @@ async def list_defaulters(current_user: User = Depends(get_current_user), db: As
         "verification_date": c.verification_date.isoformat() if c.verification_date else None,
     } for c in cases]
     
-    return ResponseFormatter.success(data=data)
+    return ResponseFormatter.create_success(data=data)
 
 @defaulter_router.get("/{case_id}")
 async def get_defaulter(case_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
@@ -286,7 +293,7 @@ async def get_defaulter(case_id: str, current_user: User = Depends(get_current_u
     if case.user_id != current_user.id:
         raise HTTPException(status_code=403, detail=ACCESS_DENIED_ERROR)
     
-    return ResponseFormatter.success(data={
+    return ResponseFormatter.create_success(data={
         "id": case.id,
         "business_name": case.business_name,
         "business_gstin": case.business_gstin,
@@ -364,7 +371,7 @@ async def update_defaulter(case_id: str, req: dict, current_user: User = Depends
     case.updated_at = datetime.now(timezone.utc)
     await db.commit()
     
-    return ResponseFormatter.success(message="Defaulter case updated")
+    return ResponseFormatter.create_success(message="Defaulter case updated")
 
 @defaulter_router.delete("/{case_id}")
 async def delete_defaulter(case_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
@@ -389,7 +396,7 @@ async def delete_defaulter(case_id: str, current_user: User = Depends(get_curren
     await db.delete(case)
     await db.commit()
     
-    return ResponseFormatter.success(message="Defaulter case deleted")
+    return ResponseFormatter.create_success(message="Defaulter case deleted")
 
 @defaulter_router.post("/{case_id}/upload-document")
 async def upload_defaulter_document(
@@ -419,7 +426,7 @@ async def upload_defaulter_document(
     case.updated_at = datetime.now(timezone.utc)
     await db.commit()
     
-    return ResponseFormatter.success(message="Document links updated")
+    return ResponseFormatter.create_success(message="Document links updated")
 # Credit Report routes
 credit_router = APIRouter()
 
@@ -437,7 +444,7 @@ async def request_credit_report(req: dict, current_user: User = Depends(get_curr
     )
     db.add(report)
     await db.commit()
-    return ResponseFormatter.success(data={"id": report.id}, message="Report requested")
+    return ResponseFormatter.create_success(data={"id": report.id}, message="Report requested")
 
 @credit_router.get("")
 async def list_credit_reports(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
@@ -445,7 +452,7 @@ async def list_credit_reports(current_user: User = Depends(get_current_user), db
     stmt = select(CreditReport).where(CreditReport.user_id == current_user.id).order_by(CreditReport.created_at.desc())
     result = await db.execute(stmt)
     reports = result.scalars().all()
-    return ResponseFormatter.success(data=[{
+    return ResponseFormatter.create_success(data=[{
         "id": r.id,
         "entity_name": r.entity_name,
         "entity_gstin": r.entity_gstin,
@@ -470,7 +477,7 @@ async def get_credit_report(report_id: str, current_user: User = Depends(get_cur
     if report.user_id != current_user.id:
         raise HTTPException(status_code=403, detail=ACCESS_DENIED_ERROR)
     
-    return ResponseFormatter.success(data={
+    return ResponseFormatter.create_success(data={
         "id": report.id,
         "entity_name": report.entity_name,
         "entity_gstin": report.entity_gstin,
@@ -508,7 +515,7 @@ async def update_credit_report(report_id: str, req: dict, current_user: User = D
     report.updated_at = datetime.now(timezone.utc)
     await db.commit()
     
-    return ResponseFormatter.success(message="Credit report updated")
+    return ResponseFormatter.create_success(message="Credit report updated")
 
 # Settlement routes
 settlement_router = APIRouter()
@@ -527,7 +534,7 @@ async def create_settlement(req: dict, current_user: User = Depends(get_current_
     )
     db.add(settlement)
     await db.commit()
-    return ResponseFormatter.success(data={"id": settlement.id}, message="Settlement created")
+    return ResponseFormatter.create_success(data={"id": settlement.id}, message="Settlement created")
 
 @settlement_router.get("")
 async def list_settlements(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
@@ -535,7 +542,7 @@ async def list_settlements(current_user: User = Depends(get_current_user), db: A
     stmt = select(Settlement).where(Settlement.user_id == current_user.id).order_by(Settlement.created_at.desc())
     result = await db.execute(stmt)
     settlements = result.scalars().all()
-    return ResponseFormatter.success(data=[{
+    return ResponseFormatter.create_success(data=[{
         "id": s.id,
         "case_reference": s.case_reference,
         "status": s.status,
@@ -558,7 +565,7 @@ async def get_settlement(settlement_id: str, current_user: User = Depends(get_cu
     if settlement.user_id != current_user.id:
         raise HTTPException(status_code=403, detail=ACCESS_DENIED_ERROR)
     
-    return ResponseFormatter.success(data={
+    return ResponseFormatter.create_success(data={
         "id": settlement.id,
         "case_reference": settlement.case_reference,
         "status": settlement.status,
@@ -593,4 +600,4 @@ async def update_settlement(settlement_id: str, req: dict, current_user: User = 
     settlement.updated_at = datetime.now(timezone.utc)
     await db.commit()
     
-    return ResponseFormatter.success(message="Settlement updated")
+    return ResponseFormatter.create_success(message="Settlement updated")

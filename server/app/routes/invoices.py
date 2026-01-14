@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import List, Optional
 from uuid import UUID
 
@@ -24,16 +24,16 @@ INVOICE_NOT_FOUND_ERROR = "Invoice not found"
 # Helper function
 def get_utc_now():
     """Get current UTC time"""
-    return datetime.now(timezone.utc)
+    return datetime.utcnow()
 
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
 
 # Helper function for success responses
 def success_response(data=None, message="Success"):
-    return ResponseFormatter.success(data=data, message=message)
+    return ResponseFormatter.create_success(data=data, message=message)
 
 
-@router.get("", response_model=InvoiceListResponse)
+@router.get("")
 async def list_invoices(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -78,13 +78,15 @@ async def list_invoices(
     )
 
 
-@router.post("", response_model=InvoiceResponse, status_code=201)
+@router.post("", status_code=201)
 async def create_invoice(
     invoice_data: InvoiceCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Create a new invoice"""
+    from uuid import uuid4
+    
     # Validate at least one identifier
     if not invoice_data.counterparty_gstin and not invoice_data.counterparty_pan:
         raise HTTPException(
@@ -93,6 +95,7 @@ async def create_invoice(
         )
 
     invoice = Invoice(
+        id=str(uuid4()),
         user_id=current_user.id,
         counterparty_name=invoice_data.counterparty_name,
         counterparty_gstin=invoice_data.counterparty_gstin,
@@ -119,7 +122,7 @@ async def create_invoice(
     return success_response(data=invoice)
 
 
-@router.get("/{invoice_id}", response_model=InvoiceResponse)
+@router.get("/{invoice_id}")
 async def get_invoice(
     invoice_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -139,7 +142,7 @@ async def get_invoice(
     return success_response(data=invoice)
 
 
-@router.put("/{invoice_id}", response_model=InvoiceResponse)
+@router.put("/{invoice_id}")
 async def update_invoice(
     invoice_id: UUID,
     invoice_data: InvoiceUpdate,
@@ -196,7 +199,7 @@ async def delete_invoice(
     await db.commit()
 
 
-@router.post("/{invoice_id}/acknowledge", response_model=InvoiceResponse)
+@router.post("/{invoice_id}/acknowledge")
 async def toggle_acknowledgment(
     invoice_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -233,7 +236,7 @@ async def toggle_acknowledgment(
     return success_response(data=invoice)
 
 
-@router.post("/{invoice_id}/follow-up", response_model=InvoiceResponse)
+@router.post("/{invoice_id}/follow-up")
 async def add_follow_up_note(
     invoice_id: UUID,
     note_data: InvoiceFollowUpNote,
@@ -281,7 +284,7 @@ async def add_follow_up_note(
     return success_response(data=invoice)
 
 
-@router.get("/reminders/due", response_model=InvoiceListResponse)
+@router.get("/reminders/due")
 async def get_due_reminders(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

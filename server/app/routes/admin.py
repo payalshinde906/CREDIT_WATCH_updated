@@ -9,7 +9,7 @@ from app.models import User, Plan, Subscription
 from app.schemas import UpdateProfileRequest, UserProfileResponse
 from app.services import AccessControlService
 from app.utils import ResponseFormatter
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_admin
 from app.exceptions import UnauthorizedFeature
 from datetime import datetime, timezone
 import uuid
@@ -21,34 +21,8 @@ JSON_MEDIA_TYPE = "application/json"
 router = APIRouter()
 
 
-# Admin middleware to check role
-def require_admin(current_user: User = Depends(get_current_user)):
-    """Dependency to ensure user is admin"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return current_user
-
-
 # ============ PLAN MANAGEMENT ============
 
-@router.get("/plans")
-async def list_plans(db: AsyncSession = Depends(get_db)):
-    """List all membership plans (public - no auth required)"""
-    stmt = select(Plan).where(Plan.is_active == True).order_by(Plan.name)
-    result = await db.execute(stmt)
-    plans = result.scalars().all()
-    return ResponseFormatter.success(
-        data=[{
-            "id": p.id,
-            "name": p.name,
-            "display_name": p.display_name,
-            "description": p.description,
-            "price": p.price,
-            "validity_days": p.validity_days,
-            "follow_up_limit": p.follow_up_limit,
-            "legal_assistance_limit": p.legal_assistance_limit,
-        } for p in plans]
-    )
 
 
 @router.post("/plans")
@@ -72,7 +46,7 @@ async def create_plan(
     db.add(plan)
     await db.commit()
     logger.info(f"Plan created: {plan.id} ({plan.name}) by admin {admin.id}")
-    return ResponseFormatter.success(data={"id": plan.id}, message="Plan created successfully")
+    return ResponseFormatter.create_success(data={"id": plan.id}, message="Plan created successfully")
 
 
 @router.put("/plans/{plan_id}")
@@ -105,7 +79,7 @@ async def update_plan(
     
     await db.commit()
     logger.info(f"Plan updated: {plan_id} by admin {admin.id}")
-    return ResponseFormatter.success(message="Plan updated successfully")
+    return ResponseFormatter.create_success(message="Plan updated successfully")
 
 
 @router.delete("/plans/{plan_id}")
@@ -125,7 +99,7 @@ async def deactivate_plan(
     plan.is_active = False
     await db.commit()
     logger.info(f"Plan deactivated: {plan_id} by admin {admin.id}")
-    return ResponseFormatter.success(message="Plan deactivated successfully")
+    return ResponseFormatter.create_success(message="Plan deactivated successfully")
 
 
 # ============ USER MANAGEMENT ============
@@ -142,7 +116,7 @@ async def list_users(
     result = await db.execute(stmt)
     users = result.scalars().all()
     
-    return ResponseFormatter.success(data=[{
+    return ResponseFormatter.create_success(data=[{
         "id": u.id,
         "gstin": u.gstin,
         "company_name": u.company_name,
@@ -176,7 +150,7 @@ async def update_user_role(
     user.role = new_role
     await db.commit()
     logger.info(f"User {user_id} role updated to {new_role} by admin {admin.id}")
-    return ResponseFormatter.success(message="User role updated successfully")
+    return ResponseFormatter.create_success(message="User role updated successfully")
 
 
 # ============ DEFAULTER VERIFICATION ============
@@ -198,7 +172,7 @@ async def list_pending_defaulters(
     result = await db.execute(stmt)
     cases = result.scalars().all()
     
-    return ResponseFormatter.success(data=[{
+    return ResponseFormatter.create_success(data=[{
         "id": c.id,
         "business_name": c.business_name,
         "business_gstin": c.business_gstin,
@@ -236,9 +210,22 @@ async def verify_defaulter_case(
     case.verification_date = datetime.now(timezone.utc)
     case.notes = notes
     
+    if action == "approve":
+        # Reward the user with 50 points
+        from app.services.wallet_service import WalletService
+        wallet_service = WalletService(db)
+        await wallet_service.add_transaction(
+            user_id=case.user_id,
+            amount=50.0,
+            trans_type="CREDIT",
+            reference_type="BONUS",
+            reference_id=case.id,
+            description=f"Reward for verified defaulter: {case.business_name}"
+        )
+
     await db.commit()
     logger.info(f"Defaulter case {case_id} {action}ed by admin {admin.id}")
-    return ResponseFormatter.success(message=f"Case {action}ed successfully")
+    return ResponseFormatter.create_success(message=f"Case {action}ed successfully")
 
 
 # ============ ANALYTICS ============
@@ -259,7 +246,7 @@ async def subscription_analytics(
         plan_name = sub.plan.name if sub.plan else "unknown"
         by_plan[plan_name] = by_plan.get(plan_name, 0) + 1
     
-    return ResponseFormatter.success(data={
+    return ResponseFormatter.create_success(data={
         "total_active": len(subs),
         "by_plan": by_plan,
     })
@@ -287,7 +274,7 @@ async def defaulter_analytics(
     # Total amount
     total_amount = sum(c.amount for c in cases)
     
-    return ResponseFormatter.success(data={
+    return ResponseFormatter.create_success(data={
         "total_cases": len(cases),
         "by_status": by_status,
         "total_amount": total_amount,

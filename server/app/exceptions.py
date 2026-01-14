@@ -82,3 +82,13 @@ class PlanNotFound(AppException):
 class InvalidPlanId(AppException):
     def __init__(self, message: str = "Invalid plan ID"):
         super().__init__("INVALID_PLAN_ID", message, 400)
+
+
+class NotFoundException(AppException):
+    def __init__(self, message: str = "Resource not found"):
+        super().__init__("NOT_FOUND", message, 404)
+
+
+class BadRequestException(AppException):
+    def __init__(self, message: str = "Bad request"):
+        super().__init__("BAD_REQUEST", message, 400)

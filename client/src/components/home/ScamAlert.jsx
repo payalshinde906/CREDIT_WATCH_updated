@@ -15,15 +15,10 @@ export default function ScamAlert() {
           </svg>
         </div>
         <div>
-          <h3 className="text-lg font-heading font-bold text-red-900 mb-1">Fraud Alert</h3>
-          <p className="text-red-800 text-sm md:text-base">
-            Formalize every trade acknowledgment inside CreditDataWatch. Avoid payment scams, informal IOUs, and non-GST transactions. Only GST-validated entities gain access.
+          <h3 className="text-lg font-heading font-bold text-red-900 mb-1">Scam Alert</h3>
+          <p className="text-red-800 text-sm md:text-base font-medium">
+            Important Fraud Alert: We have received reports of unauthorized individuals impersonating Preflex Solutions Pvt Ltd. For your security, please strictly verify the Account Number and Account Holder’s Name before processing any payments.
           </p>
-          <ul className="mt-2 text-sm text-red-800 space-y-1">
-            <li>• Never pay upfront for collections promises.</li>
-            <li>• Validate GSTIN before sharing invoices or POs.</li>
-            <li>• Report overdue payers immediately to protect your credit reputation.</li>
-          </ul>
         </div>
       </div>
     </motion.section>

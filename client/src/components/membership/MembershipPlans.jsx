@@ -13,10 +13,10 @@ export default function MembershipPlans() {
     const fetchPlans = async () => {
       try {
         setLoading(true)
-        const response = await api.get('/admin/plans')
-        
-        if (response.ok && response.data?.data) {
-          setPlans(response.data.data)
+        const response = await api.get('/subscriptions/plans')
+
+        if (response.ok && response.data) {
+          setPlans(response.data)
           setError(null)
         } else {
           setError('Failed to load plans')
@@ -36,49 +36,49 @@ export default function MembershipPlans() {
   }, [])
 
   const getDefaultPlans = () => [
-    { 
-      id: 'base', 
-      name: 'base', 
-      display_name: 'Base', 
-      price: 500, 
-      validity_days: 30, 
-      follow_up_limit: 999, 
+    {
+      id: 'base',
+      name: 'base',
+      display_name: 'Base',
+      price: 500,
+      validity_days: 30,
+      follow_up_limit: 999,
       legal_assistance: 'NO',
       reminder_followups: 'Yes',
       cir_generation_fee: 'Included',
       description: 'Entry-level plan for small businesses'
     },
-    { 
-      id: 'royal', 
-      name: 'royal', 
-      display_name: 'Royal', 
-      price: 1000, 
-      validity_days: 180, 
-      follow_up_limit: 999, 
+    {
+      id: 'royal',
+      name: 'royal',
+      display_name: 'Royal',
+      price: 1000,
+      validity_days: 180,
+      follow_up_limit: 999,
       legal_assistance: '5 Incidents follow ups',
       reminder_followups: 'Yes',
       cir_generation_fee: 'Included',
       description: 'For growing businesses with legal support'
     },
-    { 
-      id: 'groups', 
-      name: 'groups', 
-      display_name: 'Groups', 
-      price: 2000, 
-      validity_days: 365, 
-      follow_up_limit: 999, 
+    {
+      id: 'groups',
+      name: 'groups',
+      display_name: 'Groups',
+      price: 2000,
+      validity_days: 365,
+      follow_up_limit: 999,
       legal_assistance: '20 Incidents follow ups',
       reminder_followups: 'Yes',
       cir_generation_fee: 'Included',
       description: 'For organizations managing multiple business entities'
     },
-    { 
-      id: 'enterprise', 
-      name: 'enterprise', 
-      display_name: 'Enterprise', 
-      price: 100000, 
-      validity_days: 365, 
-      follow_up_limit: 999, 
+    {
+      id: 'enterprise',
+      name: 'enterprise',
+      display_name: 'Enterprise',
+      price: 100000,
+      validity_days: 365,
+      follow_up_limit: 999,
       legal_assistance: '100 Incidents follow ups',
       reminder_followups: 'Yes',
       cir_generation_fee: 'Included',

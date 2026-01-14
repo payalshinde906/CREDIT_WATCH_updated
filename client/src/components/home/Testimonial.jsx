@@ -2,17 +2,10 @@ import { motion } from 'framer-motion'
 
 const testimonials = [
   {
-    name: 'Aarav Mehta',
-    role: 'CFO, Bharat Manufacturing',
-    quote:
-      'Trade validations inside CreditDataWatch cut our dispute cycles by 40% and improved collections visibility across plants.',
-  },
-  {
-    name: 'Nisha Rao',
-    role: 'Founder, MSME Exporter',
-    quote:
-      'Overdue reporting plus structured reminders helped us recover stuck invoices without escalating to legal each time.',
-  },
+    name: 'Customer Corner',
+    role: 'Partner',
+    quote: 'Outstanding partner for accounts receivable. Their approach is firm yet respectful, and the results speak for themselves. Our cash flow has improved significantly.',
+  }
 ]
 
 export default function Testimonial() {

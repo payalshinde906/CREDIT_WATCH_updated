@@ -81,3 +81,9 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """
     async for session in get_db():
         yield session
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Dependency to ensure user is admin"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return current_user

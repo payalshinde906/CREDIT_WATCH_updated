@@ -1,4 +1,5 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import MainLayout from '../components/layout/MainLayout'
 import Home from '../pages/Home'
 import About from '../pages/About'
@@ -25,6 +26,7 @@ import Register from '../pages/auth/Register'
 import ForgotPassword from '../pages/auth/ForgotPassword'
 import Dashboard from '../pages/Dashboard'
 import Membership from '../pages/Membership'
+import Wallet from '../pages/Wallet'
 import PurchaseOrders from '../pages/PurchaseOrders'
 import Invoices from '../pages/Invoices'
 import Defaulters from '../pages/Defaulters'
@@ -33,6 +35,9 @@ import Settlement from '../pages/Settlement'
 import Privacy from '../pages/Privacy'
 import Terms from '../pages/Terms'
 import Account from '../pages/account/Account'
+import CMSDashboard from '../pages/admin/CMSDashboard'
+import CMSPageEditor from '../pages/admin/CMSPageEditor'
+import CMSPageRenderer from '../components/cms/CMSPageRenderer'
 import ProtectedRoute from '../components/ProtectedRoute'
 
 export default function AppRoutes() {
@@ -72,7 +77,42 @@ export default function AppRoutes() {
             </ProtectedRoute>
           )}
         />
-        <Route path="membership" element={<Membership />} />
+        <Route
+          path="membership"
+          element={(
+            <ProtectedRoute>
+              <Membership />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="wallet"
+          element={(
+            <ProtectedRoute>
+              <Wallet />
+            </ProtectedRoute>
+          )}
+        />
+        {/* --- CMS Admin Routes --- */}
+        <Route
+          path="/admin/cms"
+          element={(
+            <ProtectedRoute requiredRole="admin">
+              <CMSDashboard />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/admin/cms/edit/:slug"
+          element={(
+            <ProtectedRoute requiredRole="admin">
+              <CMSPageEditor />
+            </ProtectedRoute>
+          )}
+        />
+        {/* --- Public CMS Pages (Catch-all for dynamic slugs) --- */}
+        {/* Placing this specifically to not conflict with static routes */}
+        <Route path="/cms/:slug" element={<CMSPageRenderer />} />
         <Route
           path="purchase-orders"
           element={(

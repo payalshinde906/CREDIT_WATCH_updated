@@ -31,7 +31,7 @@ async def submit_contact_form(
     #     body=f"Thank you for contacting us. We will respond shortly.\n\nYour message:\n{data.message}"
     # )
     
-    return ResponseFormatter.success(
+    return ResponseFormatter.create_success(
         message="Contact form submitted successfully. We will get back to you soon."
     )
 
@@ -42,6 +42,6 @@ async def submit_public_contact_form(data: ContactRequest):
     # In production, send email to support team
     # For now, just acknowledge receipt
     
-    return ResponseFormatter.success(
+    return ResponseFormatter.create_success(
         message="Thank you for contacting us. We will respond within 24 hours."
     )

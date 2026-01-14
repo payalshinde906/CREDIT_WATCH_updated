@@ -1,7 +1,7 @@
 """
 Routes module init (stub file to map routers)
 """
-from app.routes import auth, drive, core, subscriptions, admin, business_profile
+from app.routes import auth, drive, core, subscriptions, admin, business_profile, cms
 
 # Router mappings will be imported in main.py
 # auth.router -> /api/v1/auth
@@ -14,5 +14,6 @@ from app.routes import auth, drive, core, subscriptions, admin, business_profile
 # core.credit_router -> /api/v1/credit-reports
 # core.settlement_router -> /api/v1/settlements
 # drive.router -> /api/v1/drive
+# cms.router -> /api/v1/cms
 
-__all__ = ["auth", "drive", "core"]
+__all__ = ["auth", "drive", "core", "cms"]

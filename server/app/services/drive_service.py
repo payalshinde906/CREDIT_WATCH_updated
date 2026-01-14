@@ -41,6 +41,34 @@ class DriveService:
         return flow
 
     @staticmethod
+    def get_service_account_credentials() -> Credentials:
+        """
+        Get credentials from service account file OR token.json (User OAuth)
+        """
+        from google.oauth2 import service_account
+        from google.oauth2.credentials import Credentials as UserCredentials
+        
+        # 1. Try Service Account
+        if os.path.exists(settings.GOOGLE_SERVICE_ACCOUNT_FILE):
+             return service_account.Credentials.from_service_account_file(
+                settings.GOOGLE_SERVICE_ACCOUNT_FILE, scopes=SCOPES
+            )
+            
+        # 2. Try User Token (OAuth)
+        token_path = os.path.join(os.path.dirname(settings.GOOGLE_CLIENT_CREDENTIALS_FILE), 'token.json')
+        if os.path.exists(token_path):
+            try:
+                with open(token_path, 'r') as token:
+                    info = json.load(token)
+                    return UserCredentials.from_authorized_user_info(info, SCOPES)
+            except Exception as e:
+                logger.error(f"Failed to load token.json: {e}")
+        
+        # 3. Fail
+        logger.warning(f"No valid credentials found (checked service-account.json and token.json)")
+        raise DriveAccessDenied("Google Drive credentials not configured. Please run 'python authorize_drive.py' or add service-account.json.")
+
+    @staticmethod
     def get_authorization_url() -> str:
         """
         Get OAuth2 authorization URL
@@ -176,9 +204,44 @@ class DriveService:
             credentials = DriveService.load_credentials(credentials_json)
             service = build("drive", "v3", credentials=credentials)
             
-            # Get file metadata
-            file = service.files().get(fileId=file_id, fields="webContentLink").execute()
             return file.get("webContentLink")
         except HttpError as e:
             logger.error(f"Failed to get download URL: {str(e)}")
+            raise DriveAccessDenied()
+
+    @staticmethod
+    async def upload_file(file_obj, filename: str, mime_type: str, credentials, folder_id: Optional[str] = None) -> dict:
+        """
+        Upload file to Drive
+        
+        Args:
+            file_obj: File-like object
+            filename: Name of the file
+            mime_type: MIME type of the file
+            credentials: Credentials object
+            folder_id: Optional folder ID to upload to
+            
+        Returns:
+             Dict with 'id' and 'webViewLink'
+        """
+        try:
+            from googleapiclient.http import MediaIoBaseUpload
+            
+            service = build("drive", "v3", credentials=credentials)
+            
+            file_metadata = {'name': filename}
+            if folder_id:
+                file_metadata['parents'] = [folder_id]
+                
+            media = MediaIoBaseUpload(file_obj, mimetype=mime_type, resumable=True)
+            
+            file = service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id, webViewLink, webContentLink'
+            ).execute()
+            
+            return file
+        except HttpError as e:
+            logger.error(f"Failed to upload file: {str(e)}")
             raise DriveAccessDenied()

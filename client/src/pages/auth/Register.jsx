@@ -28,23 +28,23 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setStatus({ type: '', message: '' })
-    
+
     if (form.password !== form.confirm) {
       setStatus({ type: 'error', message: 'Passwords do not match' })
       return
     }
-    
+
     const phoneE164 = formatE164(form.phone)
     if (!phoneE164) {
       setStatus({ type: 'error', message: 'Enter a valid phone with country code' })
       return
     }
-    
+
     if (!isValidGstin(form.gstin)) {
       setStatus({ type: 'error', message: 'Enter a valid GSTIN' })
       return
     }
-    
+
     if (!form.accepts) {
       setStatus({ type: 'error', message: 'Please accept the terms and privacy policy' })
       return
@@ -59,7 +59,7 @@ export default function Register() {
         phone: phoneE164,
         gstin: form.gstin,
       })
-      
+
       if (response.ok) {
         setStatus({ type: 'success', message: 'Account created! Redirecting to login...' })
         // Redirect to login after short delay
@@ -91,9 +91,8 @@ export default function Register() {
         </div>
         <div className="card">
           {status.message && (
-            <div className={`mb-4 rounded-lg px-4 py-3 text-sm font-semibold ${
-              status.type === 'error' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
-            }`}>
+            <div className={`mb-4 rounded-lg px-4 py-3 text-sm font-semibold ${status.type === 'error' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+              }`}>
               {status.message}
             </div>
           )}
@@ -187,8 +186,11 @@ export default function Register() {
                 required
                 className="mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded"
               />
-              <span>
-                I confirm that my entity is GST-registered and agree to the Terms and Privacy Policy.
+              <span className="text-gray-700">
+                I confirm that my entity is GST-registered and agree to the{' '}
+                <Link to="/terms" target="_blank" className="text-primary-600 hover:text-primary-700 underline font-medium">Terms</Link>
+                {' '}and{' '}
+                <Link to="/privacy" target="_blank" className="text-primary-600 hover:text-primary-700 underline font-medium">Privacy Policy</Link>.
               </span>
             </label>
 

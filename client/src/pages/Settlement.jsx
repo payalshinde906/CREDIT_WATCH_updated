@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { settlements } from '../services/api/apiClient'
+import { settlements, drive } from '../services/api/apiClient'
 import { useAuth } from '../state/authContext'
 
 export default function Settlement() {
@@ -7,6 +7,7 @@ export default function Settlement() {
   const allowed = canAccessFeature('SETTLEMENT')
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
   const [note, setNote] = useState('')
   const [message, setMessage] = useState('')
   const [caseRef, setCaseRef] = useState('')
@@ -41,12 +42,30 @@ export default function Settlement() {
       setMessage('Add a case reference and note.')
       return
     }
+
+    setUploading(true)
+    let docUrl = ''
+    try {
+      if (form.file) {
+        const fd = new FormData()
+        fd.append('file', form.file)
+        const upRes = await drive.upload(fd)
+        if (upRes.ok) docUrl = upRes.data.webViewLink
+        else throw new Error('Failed to upload document: ' + upRes.error)
+      }
+    } catch (err) {
+      setUploading(false)
+      setMessage(err.message)
+      return
+    }
+
     const payload = {
       case_reference: caseRef.trim(),
       status: 'open',
       notes: note.trim(),
-      documents_drive_folder: '',
+      documents_drive_folder: docUrl,
     }
+    setUploading(false)
     const res = await settlements.create(payload)
     if (!res.ok) {
       setMessage(res.error || 'Failed to record settlement')
@@ -74,7 +93,29 @@ export default function Settlement() {
 
   const handleUpdate = async (e) => {
     e.preventDefault()
-    const res = await settlements.update(selectedSettlement.id, editData)
+    setUploading(true)
+    let docUrl = editData.documents_drive_folder
+
+    try {
+      if (editData.file) {
+        const fd = new FormData()
+        fd.append('file', editData.file)
+        const upRes = await drive.upload(fd)
+        if (upRes.ok) docUrl = upRes.data.webViewLink
+        else throw new Error('Update upload failed: ' + upRes.error)
+      }
+    } catch (err) {
+      setUploading(false)
+      setMessage(err.message)
+      return
+    }
+
+    const payload = { ...editData, documents_drive_folder: docUrl }
+    delete payload.file // don't send file obj to API
+
+    const res = await settlements.update(selectedSettlement.id, payload)
+
+    setUploading(false)
     if (res.ok) {
       fetchSettlements()
       setShowDetailModal(false)
@@ -187,8 +228,18 @@ export default function Settlement() {
                 placeholder="Settlement note"
                 required
               />
-              <button type="submit" className="btn-primary w-full" disabled={!allowed}>
-                {allowed ? 'Record settlement' : 'Upgrade to record'}
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-gray-600">Settlement Document (PDF/ZIP)</label>
+                <input
+                  type="file"
+                  className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                  onChange={(e) => setForm(prev => ({ ...prev, file: e.target.files[0] }))}
+                />
+              </div>
+
+              <button type="submit" className="btn-primary w-full" disabled={!allowed || uploading}>
+                {uploading ? 'Uploading...' : (allowed ? 'Record settlement' : 'Upgrade to record')}
               </button>
             </form>
             <p className="text-xs text-gray-500">Backend stores documents and acknowledgments.</p>
@@ -268,8 +319,17 @@ export default function Settlement() {
                     type="text"
                     value={editData.documents_drive_folder}
                     onChange={(e) => setEditData({ ...editData, documents_drive_folder: e.target.value })}
-                    placeholder="Google Drive folder ID"
+                    placeholder="Document URL"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Upload New Document</label>
+                  <input
+                    type="file"
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                    onChange={(e) => setEditData({ ...editData, file: e.target.files[0] })}
                   />
                 </div>
 

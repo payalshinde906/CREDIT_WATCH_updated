@@ -2,9 +2,11 @@
 Consistent response formatting
 """
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Optional, Generic, TypeVar
 from uuid import uuid4
+from pydantic import BaseModel
 
+T = TypeVar("T")
 
 UTC_REPLACEMENT = "+00:00"
 
@@ -14,27 +16,24 @@ def current_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat().replace(UTC_REPLACEMENT, "Z")
 
 
-class ResponseFormatter:
+class ResponseFormatter(BaseModel, Generic[T]):
     """Format consistent API responses"""
+    success: bool
+    data: Optional[T] = None
+    error: Optional[dict] = None
+    message: Optional[str] = None
+    timestamp: str
+    request_id: str
 
     @staticmethod
-    def success(
+    def create_success(
         data: Any = None,
         message: str = "Operation successful",
         status_code: int = 200,
         request_id: Optional[str] = None,
     ) -> dict:
         """
-        Success response
-        
-        Args:
-            data: Response data
-            message: Success message
-            status_code: HTTP status code
-            request_id: Request ID for tracking
-            
-        Returns:
-            Formatted response dict
+        Success response helper
         """
         return {
             "success": True,
@@ -45,7 +44,7 @@ class ResponseFormatter:
         }
 
     @staticmethod
-    def error(
+    def create_error(
         code: str,
         message: str,
         status_code: int = 400,
@@ -53,17 +52,7 @@ class ResponseFormatter:
         request_id: Optional[str] = None,
     ) -> dict:
         """
-        Error response
-        
-        Args:
-            code: Error code
-            message: Error message
-            status_code: HTTP status code
-            details: Additional error details
-            request_id: Request ID for tracking
-            
-        Returns:
-            Formatted error response dict
+        Error response helper
         """
         return {
             "success": False,

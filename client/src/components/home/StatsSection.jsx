@@ -1,10 +1,10 @@
 import { motion } from 'framer-motion'
 
 const stats = [
-  { label: 'Overdue Reports Filed', value: '24K+', color: 'text-white' },
-  { label: 'Avg. Recovery Acceleration', value: '38%', color: 'text-white' },
-  { label: 'Trade Validations Completed', value: '110K', color: 'text-white' },
-  { label: 'GST Entities Verified', value: '65K+', color: 'text-white' },
+  { label: 'Highest No. of Defaulters by a Single Customer', value: '668+', color: 'text-white' },
+  { label: 'Total Number of MSMEs Connected', value: '39+ Lakhs', color: 'text-white' },
+  { label: 'Average Percentage of Settlements', value: '59%', color: 'text-white' },
+  { label: 'Total amount reported defaulter', value: '4578+ Crores', color: 'text-white' },
 ]
 
 export default function StatsSection() {

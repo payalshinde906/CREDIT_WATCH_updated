@@ -20,7 +20,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/
  */
 async function apiRequest(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`
-  
+
   const defaultOptions = {
     credentials: 'include', // Send cookies with every request
     headers: {
@@ -153,11 +153,11 @@ export const user = {
 
 export const purchaseOrders = {
   create: (data) => apiRequest('/purchase-orders', { method: 'POST', body: JSON.stringify(data) }),
-    list: (page = 1, pageSize = 20, includeArchived = false) => apiRequest(`/purchase-orders?page=${page}&page_size=${pageSize}&include_archived=${includeArchived}`),
+  list: (page = 1, pageSize = 20, includeArchived = false) => apiRequest(`/purchase-orders?page=${page}&page_size=${pageSize}&include_archived=${includeArchived}`),
   get: (id) => apiRequest(`/purchase-orders/${id}`),
   update: (id, data) => apiRequest(`/purchase-orders/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id) => apiRequest(`/purchase-orders/${id}`, { method: 'DELETE' }),
-    archive: (id) => apiRequest(`/purchase-orders/${id}/archive`, { method: 'POST' }),
+  archive: (id) => apiRequest(`/purchase-orders/${id}/archive`, { method: 'POST' }),
 }
 
 export const defaulters = {
@@ -219,10 +219,34 @@ export const contact = {
   submit: (data) => apiRequest('/contact/public', { method: 'POST', body: JSON.stringify(data) }),
 }
 
+export const cms = {
+  getPage: (slug) => apiRequest(`/cms/pages/${slug}`),
+  listPages: () => apiRequest('/cms/admin/pages'),
+  createPage: (data) => apiRequest('/cms/admin/pages', { method: 'POST', body: JSON.stringify(data) }),
+  updatePage: (id, data) => apiRequest(`/cms/admin/pages/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deletePage: (id) => apiRequest(`/cms/admin/pages/${id}`, { method: 'DELETE' }),
+  addSection: (pageId, data) => apiRequest(`/cms/admin/pages/${pageId}/sections`, { method: 'POST', body: JSON.stringify(data) }),
+  updateSection: (id, data) => apiRequest(`/cms/admin/sections/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteSection: (id) => apiRequest(`/cms/admin/sections/${id}`, { method: 'DELETE' }),
+  reorderSections: (pageId, payload) => apiRequest(`/cms/admin/pages/${pageId}/reorder-sections`, { method: 'PUT', body: JSON.stringify(payload) }),
+}
+
+export const wallet = {
+  getBalance: () => apiRequest('/wallet/balance'),
+  getHistory: (page = 1, limit = 10) => apiRequest(`/wallet/history?page=${page}&limit=${limit}`),
+  redeem: (amount, reference) => apiRequest('/wallet/redeem', { method: 'POST', body: JSON.stringify({ amount, reference }) }),
+}
+
 export const drive = {
   getAuthUrl: () => apiRequest('/drive/auth-url'),
   callback: (code, state) => apiRequest('/drive/callback', { method: 'POST', body: JSON.stringify({ code, state }) }),
   listFiles: () => apiRequest('/drive/files'),
+  upload: (formData) => apiRequest('/drive/upload', {
+    method: 'POST',
+    body: formData,
+    // Do NOT set Content-Type header for FormData; fetch sets it with boundary automatically
+    headers: {}
+  }),
 }
 
 // Utility: Check authentication status

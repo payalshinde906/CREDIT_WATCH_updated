@@ -3,6 +3,7 @@ Authentication routes
 """
 from typing import Optional
 from fastapi import APIRouter, Depends, Response, Request, HTTPException, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas import RegisterRequest, LoginRequest, RefreshTokenRequest, SendOTPRequest, VerifyOTPRequest
@@ -35,14 +36,14 @@ async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db),
         )
         
         request_id = http_request.state.request_id if http_request else ""
-        response_data = ResponseFormatter.success(
+        response_data = ResponseFormatter.create_success(
             data=result["user"],
             message="Registration successful",
             request_id=request_id
         )
         
         # Return tokens in httpOnly cookies
-        response = Response(content=str(response_data), media_type=JSON_MEDIA_TYPE)
+        response = JSONResponse(content=response_data)
         response.set_cookie(
             key="access_token",
             value=result["tokens"]["access_token"],
@@ -77,13 +78,13 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db), http_
         result = await AuthService.login(request, db)
         
         request_id = http_request.state.request_id if http_request else ""
-        response_data = ResponseFormatter.success(
+        response_data = ResponseFormatter.create_success(
             data=result["user"],
             message="Login successful",
             request_id=request_id
         )
         
-        response = Response(content=str(response_data), media_type=JSON_MEDIA_TYPE)
+        response = JSONResponse(content=response_data)
         response.set_cookie(
             key="access_token",
             value=result["tokens"]["access_token"],
@@ -134,13 +135,13 @@ async def refresh_token(request: Optional[RefreshTokenRequest] = None, db: Async
         result = await AuthService.refresh_access_token(refresh_token_value, db)
         
         request_id = http_request.state.request_id if http_request else ""
-        response_data = ResponseFormatter.success(
+        response_data = ResponseFormatter.create_success(
             data=result,
             message="Token refreshed",
             request_id=request_id
         )
         
-        response = Response(content=str(response_data), media_type=JSON_MEDIA_TYPE)
+        response = JSONResponse(content=response_data)
         response.set_cookie(
             key="access_token",
             value=result["access_token"],
@@ -162,12 +163,12 @@ async def refresh_token(request: Optional[RefreshTokenRequest] = None, db: Async
 async def logout(http_request: Request = None):
     """Logout user (clear cookies)"""
     request_id = http_request.state.request_id if http_request else ""
-    response_data = ResponseFormatter.success(
+    response_data = ResponseFormatter.create_success(
         message="Logged out successfully",
         request_id=request_id
     )
     
-    response = Response(content=str(response_data), media_type=JSON_MEDIA_TYPE)
+    response = JSONResponse(content=response_data)
     response.delete_cookie("access_token", domain=settings.COOKIE_DOMAIN, path=settings.COOKIE_PATH)
     response.delete_cookie("refresh_token", domain=settings.COOKIE_DOMAIN, path=settings.COOKIE_PATH)
     
@@ -181,7 +182,7 @@ async def send_otp(request: SendOTPRequest, http_request: Request = None):
         result = await OTPService.send_otp(request.phone, "phone_verification")
         
         request_id = http_request.state.request_id if http_request else ""
-        return ResponseFormatter.success(
+        return ResponseFormatter.create_success(
             data={"sent": result["sent"]},
             message=result["message"],
             request_id=request_id
@@ -198,7 +199,7 @@ async def verify_otp(request: VerifyOTPRequest, http_request: Request = None):
         await OTPService.verify_otp(request.phone, request.otp_code)
         
         request_id = http_request.state.request_id if http_request else ""
-        return ResponseFormatter.success(
+        return ResponseFormatter.create_success(
             message="OTP verified successfully",
             request_id=request_id
         )
@@ -219,7 +220,7 @@ async def send_password_reset_otp(request: dict, http_request: Request = None):
         result = await OTPService.send_otp_for_password_reset(email)
         
         request_id = http_request.state.request_id if http_request else ""
-        return ResponseFormatter.success(
+        return ResponseFormatter.create_success(
             data={"sent": result["sent"]},
             message=result["message"],
             request_id=request_id
@@ -239,7 +240,7 @@ async def verify_password_reset_otp(request: dict, http_request: Request = None)
         await OTPService.verify_otp_for_password_reset(email, otp_code)
         
         request_id = http_request.state.request_id if http_request else ""
-        return ResponseFormatter.success(
+        return ResponseFormatter.create_success(
             message="OTP verified successfully",
             request_id=request_id
         )
@@ -263,7 +264,7 @@ async def reset_password(request: dict, db: AsyncSession = Depends(get_db), http
         await AuthService.reset_password(email, otp_code, password, db)
         
         request_id = http_request.state.request_id if http_request else ""
-        return ResponseFormatter.success(
+        return ResponseFormatter.create_success(
             message="Password reset successful",
             request_id=request_id
         )

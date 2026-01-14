@@ -76,7 +76,7 @@ export default function Footer() {
           ))}
         </div>
         <div className="border-t border-gray-800 mt-10 pt-6 text-sm text-gray-500 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <span>© {new Date().getFullYear()} CreditDataWatch. All rights reserved.</span>
+          <span>Copyright © 2026 –Till Now. Credit-Data-Watch. All Rights Reserved.</span>
           <div className="flex gap-4">
             <Link to="/privacy" className="hover:text-primary-300">Privacy</Link>
             <Link to="/terms" className="hover:text-primary-300">Terms</Link>

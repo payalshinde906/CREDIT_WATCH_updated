@@ -8,6 +8,7 @@ const navLinks = [
   { label: 'Services', to: '/services' },
   { label: 'Solutions', to: '/solutions' },
   { label: 'Membership', to: '/membership' },
+  { label: 'Wallet', to: '/wallet' },
   { label: 'Offerings', to: '/offerings' },
   { label: 'Contact', to: '/contact' },
 ]
@@ -34,8 +35,7 @@ export default function Header() {
               key={link.to}
               to={link.to}
               className={({ isActive }) =>
-                `text-sm font-semibold transition-colors ${
-                  isActive ? 'text-primary-700' : 'text-gray-700 hover:text-primary-700'
+                `text-sm font-semibold transition-colors ${isActive ? 'text-primary-700' : 'text-gray-700 hover:text-primary-700'
                 }`
               }
             >
@@ -79,8 +79,7 @@ export default function Header() {
                   key={link.to}
                   to={link.to}
                   className={({ isActive }) =>
-                    `block text-base font-semibold ${
-                      isActive ? 'text-primary-700' : 'text-gray-700 hover:text-primary-700'
+                    `block text-base font-semibold ${isActive ? 'text-primary-700' : 'text-gray-700 hover:text-primary-700'
                     }`
                   }
                   onClick={() => setOpen(false)}

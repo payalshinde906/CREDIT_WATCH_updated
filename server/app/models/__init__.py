@@ -26,8 +26,8 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True, index=True)
     role = Column(String(20), default="user", index=True)  # user, admin
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     subscription = relationship("Subscription", back_populates="user", uselist=False, cascade=CASCADE_DELETE_ORPHAN)
@@ -38,6 +38,7 @@ class User(Base):
     credit_reports = relationship("CreditReport", back_populates="user", cascade=CASCADE_DELETE_ORPHAN)
     settlements = relationship("Settlement", back_populates="user", cascade=CASCADE_DELETE_ORPHAN)
     appointments = relationship("Appointment", back_populates="user", cascade=CASCADE_DELETE_ORPHAN)
+    wallet = relationship("Wallet", back_populates="user", uselist=False, cascade=CASCADE_DELETE_ORPHAN)
 
     __table_args__ = (
         Index("idx_user_gstin_active", "gstin", "is_active"),
@@ -55,10 +56,10 @@ class Subscription(Base):
     user_id = Column(String(36), ForeignKey(USER_ID_FK, ondelete=ONDELETE_CASCADE), nullable=False, index=True)
     plan_id = Column(String(36), ForeignKey("plans.id"), nullable=False, index=True)
     is_active = Column(Boolean, default=True, index=True)
-    start_date = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    start_date = Column(DateTime, default=datetime.utcnow, nullable=False)
     expiry_date = Column(DateTime, nullable=True, index=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     user = relationship("User", back_populates="subscription")
@@ -83,8 +84,8 @@ class Plan(Base):
     follow_up_limit = Column(Integer, nullable=False, default=10)  # max follow-ups per case
     legal_assistance_limit = Column(Integer, nullable=False, default=2)  # max legal escalations per case
     is_active = Column(Boolean, default=True, index=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     subscriptions = relationship("Subscription", back_populates="plan", cascade=CASCADE_DELETE_ORPHAN)
@@ -108,8 +109,8 @@ class BusinessProfile(Base):
     gstin = Column(String(15), nullable=False, index=True)
     profile_photo_url = Column(String(512), nullable=True)  # Google Drive URL
     company_logo_url = Column(String(512), nullable=True)   # Google Drive URL
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     user = relationship("User", back_populates="business_profiles")
@@ -131,8 +132,8 @@ class PurchaseOrder(Base):
     is_archived = Column(Boolean, default=False, index=True)
     document_url = Column(String(500), nullable=True)  # Google Drive URL
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     user = relationship("User", back_populates="purchase_orders")
@@ -163,8 +164,8 @@ class Invoice(Base):
     last_follow_up_at = Column(DateTime, nullable=True)
     follow_up_history = Column(JSON, default=list)
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     user = relationship("User", back_populates="invoices")
@@ -195,8 +196,8 @@ class DefaulterCase(Base):
     documents_drive_folder = Column(String(500), nullable=True)  # Google Drive folder ID
     ledger_url = Column(String(500), nullable=True)
     ca_certificate_url = Column(String(500), nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     user = relationship("User", back_populates="defaulter_cases")
@@ -221,9 +222,9 @@ class CreditReport(Base):
     status = Column(String(50), default="Requested", index=True)  # Requested, Ready, Pending refresh
     report_url = Column(String(500), nullable=True)  # Google Drive link
     last_updated = Column(DateTime, nullable=True)
-    requested_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    requested_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     user = relationship("User", back_populates="credit_reports")
@@ -245,8 +246,8 @@ class Settlement(Base):
     status = Column(String(50), default="Open", index=True)
     notes = Column(Text, nullable=True)
     documents_drive_folder = Column(String(500), nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     user = relationship("User", back_populates="settlements")
@@ -270,8 +271,8 @@ class Appointment(Base):
     purpose = Column(String(500), nullable=False)
     status = Column(String(50), default="scheduled", index=True)  # scheduled, confirmed, completed, cancelled
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     user = relationship("User", back_populates="appointments")
@@ -281,3 +282,82 @@ class Appointment(Base):
         Index("idx_appointment_date", "appointment_date"),
     )
 
+
+class Wallet(Base):
+    """User wallet for points/credits"""
+
+    __tablename__ = "wallets"
+
+    id = Column(String(36), primary_key=True, index=True)
+    user_id = Column(String(36), ForeignKey(USER_ID_FK, ondelete=ONDELETE_CASCADE), nullable=False, unique=True, index=True)
+    balance = Column(Float, default=0.0, nullable=False)
+    currency = Column(String(20), default="INR_POINTS")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="wallet")
+    transactions = relationship("WalletTransaction", back_populates="wallet", cascade=CASCADE_DELETE_ORPHAN)
+
+
+class WalletTransaction(Base):
+    """History of wallet credits/debits"""
+
+    __tablename__ = "wallet_transactions"
+
+    id = Column(String(36), primary_key=True, index=True)
+    wallet_id = Column(String(36), ForeignKey("wallets.id", ondelete=ONDELETE_CASCADE), nullable=False, index=True)
+    amount = Column(Float, nullable=False)  # Positive for credit, negative for debit (visual only, implementation stores abs usually but let's stick to signed or explicit type)
+    # Sticking to: Amount is absolute, Type determines sign logic.
+    trans_type = Column(String(20), nullable=False) # CREDIT, DEBIT
+    reference_type = Column(String(50), nullable=False) # SUBSCRIPTION, REFERRAL, etc.
+    reference_id = Column(String(36), nullable=True)
+    description = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    # Relationships
+    wallet = relationship("Wallet", back_populates="transactions")
+
+    __table_args__ = (
+        Index("idx_wallet_trans_wallet_date", "wallet_id", "created_at"),
+    )
+
+
+
+class CMSPage(Base):
+    """CMS Page model for dynamic content pages"""
+
+    __tablename__ = "cms_pages"
+
+    id = Column(String(36), primary_key=True, index=True)
+    slug = Column(String(100), unique=True, nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    is_published = Column(Boolean, default=False, index=True)
+    seo_title = Column(String(255), nullable=True)
+    seo_description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    sections = relationship("CMSSection", back_populates="page", cascade=CASCADE_DELETE_ORPHAN, order_by="CMSSection.order_index")
+
+
+class CMSSection(Base):
+    """CMS Section model for page blocks"""
+
+    __tablename__ = "cms_sections"
+
+    id = Column(String(36), primary_key=True, index=True)
+    page_id = Column(String(36), ForeignKey("cms_pages.id", ondelete=ONDELETE_CASCADE), nullable=False, index=True)
+    type = Column(String(50), nullable=False)  # hero, stats, scam_alert, etc.
+    order_index = Column(Integer, nullable=False, default=0)
+    is_visible = Column(Boolean, default=True)
+    content = Column(JSON, default=dict)  # Flexible JSON payload
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    page = relationship("CMSPage", back_populates="sections")
+
+    __table_args__ = (
+        Index("idx_cms_section_page_order", "page_id", "order_index"),
+    )

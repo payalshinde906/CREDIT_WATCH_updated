@@ -1,5 +1,6 @@
 import HeroSection from '../components/home/HeroSection'
 import ScamAlert from '../components/home/ScamAlert'
+import CreditScoreInfo from '../components/home/CreditScoreInfo'
 import ServicesGrid from '../components/home/ServicesGrid'
 import SolutionsSection from '../components/home/SolutionsSection'
 import StatsSection from '../components/home/StatsSection'
@@ -16,6 +17,7 @@ export default function Home() {
       <SolutionsSection />
       <StatsSection />
       <Testimonial />
+      <CreditScoreInfo />
       <FAQSection />
       <CTASection />
     </>

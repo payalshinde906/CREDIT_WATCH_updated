@@ -2,7 +2,7 @@ import { useMemo, useEffect, useState } from 'react'
 import QuickActions from '../components/dashboard/QuickActions'
 import NotificationsPanel from '../components/dashboard/NotificationsPanel'
 import { useAuth } from '../state/authContext'
-import { purchaseOrders, invoices, defaulters, creditReports, settlements, appointments } from '../services/api/apiClient'
+import { purchaseOrders, invoices, defaulters, creditReports, settlements, appointments, wallet } from '../services/api/apiClient'
 import { Link } from 'react-router-dom'
 
 export default function Dashboard() {
@@ -14,6 +14,7 @@ export default function Dashboard() {
     creditReports: 0,
     settlements: 0,
     appointments: 0,
+    wallet: 0,
   })
   const [recentActivity, setRecentActivity] = useState([])
   const [dueReminders, setDueReminders] = useState([])
@@ -28,8 +29,7 @@ export default function Dashboard() {
   const fetchDashboardData = async () => {
     setLoadingData(true)
     try {
-      // Fetch counts and recent data in parallel
-      const [posRes, invoicesRes, defaultersRes, reportsRes, settlementsRes, appointmentsRes, remindersRes] = await Promise.all([
+      const [posRes, invoicesRes, defaultersRes, reportsRes, settlementsRes, appointmentsRes, remindersRes, walletRes] = await Promise.all([
         purchaseOrders.list(1, 10, false),
         invoices.list({ limit: 10 }),
         defaulters.list(1, 10),
@@ -37,6 +37,7 @@ export default function Dashboard() {
         settlements.list(1, 10),
         appointments.list(),
         invoices.getDueReminders(),
+        wallet.getBalance(),
       ])
 
       // Set stats
@@ -47,11 +48,12 @@ export default function Dashboard() {
         creditReports: reportsRes.ok ? (reportsRes.data?.total || reportsRes.data?.items?.length || 0) : 0,
         settlements: settlementsRes.ok ? (settlementsRes.data?.total || settlementsRes.data?.items?.length || 0) : 0,
         appointments: appointmentsRes.ok ? (appointmentsRes.data?.length || 0) : 0,
+        wallet: walletRes.ok ? (walletRes.data?.balance || 0) : 0,
       })
 
       // Build recent activity from all sources
       const activity = []
-      
+
       if (posRes.ok && posRes.data?.items) {
         posRes.data.items.slice(0, 3).forEach(po => {
           activity.push({
@@ -198,6 +200,13 @@ export default function Dashboard() {
             <p className="text-3xl font-heading font-bold text-orange-600">{stats.appointments}</p>
             <Link to="/appointment" className="text-xs text-orange-600 hover:underline mt-2 inline-block">
               View all →
+            </Link>
+          </div>
+          <div className="card hover:shadow-md transition-shadow bg-gradient-to-br from-indigo-50 to-white">
+            <p className="text-sm text-gray-500 mb-1">My Wallet</p>
+            <p className="text-3xl font-heading font-bold text-indigo-700">{stats.wallet} <span className="text-sm text-gray-500 font-normal">pts</span></p>
+            <Link to="/wallet" className="text-xs text-indigo-700 hover:underline mt-2 inline-block">
+              Redeem →
             </Link>
           </div>
         </div>

@@ -24,7 +24,7 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
             logger.warning(f"[{request_id}] AppException: {exc.code} - {exc.message}")
             return JSONResponse(
                 status_code=exc.status_code,
-                content=ResponseFormatter.error(
+                content=ResponseFormatter.create_error(
                     exc.code,
                     exc.message,
                     exc.status_code,
@@ -36,7 +36,7 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
             logger.error(f"[{request_id}] Unexpected error: {str(exc)}", exc_info=True)
             return JSONResponse(
                 status_code=500,
-                content=ResponseFormatter.error(
+                content=ResponseFormatter.create_error(
                     "INTERNAL_SERVER_ERROR",
                     "An unexpected error occurred",
                     500,

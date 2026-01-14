@@ -28,7 +28,12 @@ export default function SubscribeModal({ plan, onClose }) {
           setSuccess(false)
         }, 2000)
       } else {
-        setError(response.data?.detail || 'Failed to purchase subscription')
+        if (response.status === 401) {
+          // Redirect to login if unauthorized
+          window.location.href = '/auth/login?redirect=/membership'
+          return
+        }
+        setError(response.error || 'Failed to purchase subscription')
       }
     } catch (err) {
       setError(err.message || 'An error occurred')

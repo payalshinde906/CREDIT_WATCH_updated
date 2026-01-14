@@ -40,7 +40,7 @@ async def create_appointment(
     await db.commit()
     await db.refresh(appointment)
 
-    return ResponseFormatter.success(
+    return ResponseFormatter.create_success(
         data={
             "id": appointment.id,
             "contact_name": appointment.contact_name,
@@ -75,7 +75,7 @@ async def list_appointments(
     result = await db.execute(query)
     appointments = result.scalars().all()
 
-    return ResponseFormatter.success(
+    return ResponseFormatter.create_success(
         data=[
             {
                 "id": a.id,
@@ -111,7 +111,7 @@ async def get_appointment(
     if not appointment:
         raise HTTPException(status_code=404, detail=APPOINTMENT_NOT_FOUND_ERROR)
 
-    return ResponseFormatter.success(
+    return ResponseFormatter.create_success(
         data={
             "id": appointment.id,
             "contact_name": appointment.contact_name,
@@ -164,7 +164,7 @@ async def update_appointment(
     await db.commit()
     await db.refresh(appointment)
 
-    return ResponseFormatter.success(message="Appointment updated successfully")
+    return ResponseFormatter.create_success(message="Appointment updated successfully")
 
 
 @router.delete("/{appointment_id}", status_code=204)
