@@ -34,6 +34,7 @@ async def list_plans(db: AsyncSession = Depends(get_db)):
                 "name": p.name,
                 "display_name": p.display_name,
                 "description": p.description,
+                "duration_type": p.duration_type.value if hasattr(p.duration_type, 'value') else str(p.duration_type),
                 "price": p.price,
                 "validity_days": p.validity_days,
                 "features": {
@@ -147,6 +148,7 @@ async def get_subscription_status(
             subscription_data = {
                 "id": subscription.id,
                 "plan_id": subscription.plan_id,
+                "status": subscription.status.value if hasattr(subscription.status, 'value') else str(subscription.status),
                 "start_date": subscription.start_date.isoformat(),
                 "expiry_date": expiry_isoformat,
             }

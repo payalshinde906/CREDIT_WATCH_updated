@@ -14,7 +14,7 @@ export default function CTASection() {
             <Link to="/appointment" className="btn-accent bg-white text-primary-700 hover:bg-gray-100">
               Book Appointment
             </Link>
-            <Link to="/auth" className="btn-secondary border-white text-white hover:bg-white/10">
+            <Link to="/auth" className="btn-accent bg-white text-primary-700 hover:bg-gray-100">
               Login / Register
             </Link>
           </div>

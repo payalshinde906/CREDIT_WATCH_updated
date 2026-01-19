@@ -5,7 +5,7 @@ from uuid import uuid4
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.models import Subscription, Plan, User
+from app.models import Subscription, Plan, User, MembershipStatus
 from app.exceptions import PlanNotFound, UserNotFound, InvalidPlanId
 from app.utils.response import ResponseFormatter
 import logging
@@ -65,7 +65,8 @@ class SubscriptionService:
     async def purchase_subscription(
         user_id: str, 
         plan_id: str, 
-        db: AsyncSession
+        db: AsyncSession,
+        payment_id: str = None
     ) -> Subscription:
         """
         Purchase a subscription plan
@@ -114,6 +115,7 @@ class SubscriptionService:
         
         for sub in active_subs:
             sub.is_active = False
+            sub.status = MembershipStatus.EXPIRED
             sub.updated_at = datetime.now(timezone.utc)
         
         # Create new subscription
@@ -124,9 +126,11 @@ class SubscriptionService:
             id=str(uuid4()),
             user_id=user_id,
             plan_id=plan_id,
+            status=MembershipStatus.ACTIVE,
             is_active=True,
             start_date=now,
             expiry_date=expiry_date,
+            payment_id=payment_id,
             created_at=now,
             updated_at=now,
         )

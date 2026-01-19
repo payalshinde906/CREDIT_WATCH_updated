@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Response, Request, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
-from app.schemas import RegisterRequest, LoginRequest, RefreshTokenRequest, SendOTPRequest, VerifyOTPRequest
+from app.schemas import RegisterRequest, RegisterSendOTPRequest, LoginRequest, RefreshTokenRequest, SendOTPRequest, VerifyOTPRequest
 from app.services import AuthService, EmailService, OTPService
 from app.utils import ResponseFormatter, format_phone_e164
 from app.config import settings
@@ -21,10 +21,47 @@ JSON_MEDIA_TYPE = "application/json"
 router = APIRouter()
 
 
+@router.post("/register/send-otp")
+async def register_send_otp(request: RegisterSendOTPRequest, http_request: Request = None):
+    """Send OTP for registration verification"""
+    try:
+        from app.utils import format_phone_e164, is_valid_phone
+        from app.exceptions import InvalidPhone
+        
+        # Validate phone
+        phone_e164 = format_phone_e164(request.phone)
+        if not phone_e164 or not is_valid_phone(request.phone):
+            raise InvalidPhone()
+        
+        # Send OTP to both email and phone
+        result = await OTPService.send_otp(phone_e164, "registration", email=request.email)
+        
+        request_id = http_request.state.request_id if http_request else ""
+        return ResponseFormatter.create_success(
+            data={"sent": result["sent"], "otp_code": result.get("otp_code")},  # otp_code only in dev
+            message=result.get("message", "OTP sent"),
+            request_id=request_id
+        )
+    except Exception as e:
+        logger.error(f"Registration OTP error: {str(e)}")
+        raise
+
+
 @router.post("/register")
 async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db), http_request: Request = None):
-    """Register new user"""
+    """Register new user (requires OTP verification)"""
     try:
+        # Verify OTP if provided
+        if request.otp_code:
+            from app.utils import format_phone_e164
+            phone_e164 = format_phone_e164(request.phone) or request.phone
+            try:
+                await OTPService.verify_otp(phone_e164, request.otp_code)
+            except Exception as e:
+                logger.error(f"OTP verification failed: {str(e)}")
+                from app.exceptions import InvalidOTP
+                raise InvalidOTP("Invalid or expired OTP. Please request a new one.")
+        
         result = await AuthService.register(request, db)
         
         # Send welcome email

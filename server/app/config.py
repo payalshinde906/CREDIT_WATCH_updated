@@ -24,12 +24,13 @@ class Settings(BaseSettings):
     COOKIE_HTTPONLY: bool = True
     COOKIE_SAMESITE: str = "lax"
 
-    # Google SMTP (Email)
+    # Google SMTP (Email) - Using SMTP_SSL on port 465
     GOOGLE_SMTP_HOST: str = "smtp.gmail.com"
-    GOOGLE_SMTP_PORT: int = 587
+    GOOGLE_SMTP_PORT: int = 465  # SMTP_SSL port (NOT 587 for starttls)
     GOOGLE_SMTP_USER: str = ""
-    GOOGLE_SMTP_PASSWORD: str = ""
-    SENDER_EMAIL: str = ""
+    GOOGLE_SMTP_PASSWORD: str = ""  # Gmail App Password (not regular password)
+    SENDER_EMAIL: str = ""  # Optional: defaults to GOOGLE_SMTP_USER if not set
+    SMTP_TIMEOUT: int = 30  # Connection timeout in seconds
 
     # Google Drive OAuth2
     GOOGLE_CLIENT_CREDENTIALS_FILE: str = "server/credentials/client-credentials.json"

@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { isValidGstin } from '../../utils/validation'
-import authService from '../../services/authService'
+import { useAuth } from '../../state/authContext'
 
 export default function Login() {
   const navigate = useNavigate()
+  const { login } = useAuth()
   const [form, setForm] = useState({ email: '', password: '', gstin: '' })
   const [status, setStatus] = useState({ type: '', message: '' })
   const [submitting, setSubmitting] = useState(false)
@@ -16,10 +17,17 @@ export default function Login() {
     e.preventDefault()
     setStatus({ type: '', message: '' })
     
-    if (!isValidGstin(form.gstin)) {
-      setStatus({ type: 'error', message: 'Enter a valid GSTIN' })
+    // Validation
+    if (!form.email || !form.email.includes('@')) {
+      setStatus({ type: 'error', message: 'Please enter a valid email address' })
       return
     }
+    
+    if (!isValidGstin(form.gstin)) {
+      setStatus({ type: 'error', message: 'Enter a valid GSTIN (15 characters)' })
+      return
+    }
+    
     if (!form.password || form.password.length < 6) {
       setStatus({ type: 'error', message: 'Password must be at least 6 characters' })
       return
@@ -27,18 +35,18 @@ export default function Login() {
     
     setSubmitting(true)
     try {
-      const response = await authService.login({
-        email: form.email,
+      const success = await login({
+        email: form.email.trim().toLowerCase(),
         password: form.password,
-        gstin: form.gstin,
+        gstin: form.gstin.trim().toUpperCase(),
       })
       
-      if (response.ok) {
+      if (success) {
         setStatus({ type: 'success', message: 'Login successful! Redirecting...' })
         // Redirect to dashboard after short delay
         setTimeout(() => navigate('/dashboard'), 500)
       } else {
-        setStatus({ type: 'error', message: response.error || 'Login failed' })
+        setStatus({ type: 'error', message: 'Invalid email, password, or GSTIN. Please check your credentials.' })
       }
     } catch (error) {
       setStatus({ type: 'error', message: 'Network error: ' + error.message })

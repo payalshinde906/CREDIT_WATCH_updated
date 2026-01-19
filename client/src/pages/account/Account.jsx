@@ -1,126 +1,247 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../state/authContext'
 import { api } from '../../services/api/apiClient'
 import authService from '../../services/authService'
 import { formatE164 } from '../../utils/phone'
 
 export default function Account() {
-  const { user, subscription, loadUser } = useAuth()
-  const [form, setForm] = useState({ 
-    company_name: '', 
-    registered_name: '',
-    email: '', 
-    phone: '',
-  })
+  const { user, logout, loadUser } = useAuth()
+  const navigate = useNavigate()
   const [profile, setProfile] = useState(null)
-  const [status, setStatus] = useState('')
-  const [otpCode, setOtpCode] = useState('')
-  const [otpStatus, setOtpStatus] = useState('')
   const [loading, setLoading] = useState(true)
+  
+  // Form states
+  const [companyName, setCompanyName] = useState('')
+  const [editingName, setEditingName] = useState(false)
+  
+  // Phone change
+  const [showPhoneChange, setShowPhoneChange] = useState(false)
+  const [newPhone, setNewPhone] = useState('')
+  const [phoneOtp, setPhoneOtp] = useState('')
+  const [phoneOtpSent, setPhoneOtpSent] = useState(false)
+  const [phoneStatus, setPhoneStatus] = useState('')
+  
+  // Email change
+  const [showEmailChange, setShowEmailChange] = useState(false)
+  const [newEmail, setNewEmail] = useState('')
+  const [emailOtp, setEmailOtp] = useState('')
+  const [emailOtpSent, setEmailOtpSent] = useState(false)
+  const [emailStatus, setEmailStatus] = useState('')
+  
+  // Image uploads
   const [photoUploading, setPhotoUploading] = useState(false)
   const [logoUploading, setLogoUploading] = useState(false)
+  
+  // Time display
+  const [currentTime, setCurrentTime] = useState({ gmt: '', ist: '' })
+  const [loginTime, setLoginTime] = useState('')
 
-  // Load user and business profile
   useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        if (user) {
-          setForm({
-            company_name: user.company_name || '',
-            registered_name: user.company_name || '',
-            email: user.email || '',
-            phone: user.phone || '',
-          })
-          
-          // Fetch business profile
-          const response = await api.get('/account/profile')
-          if (response.ok && response.data?.data) {
-            setProfile(response.data.data)
-          }
-        }
-      } catch (err) {
-        console.error('Error loading profile:', err)
-      } finally {
-        setLoading(false)
+    if (user) {
+      setCompanyName(user.company_name || '')
+      // Get login time from localStorage or use created_at
+      const storedLoginTime = localStorage.getItem('loginTime')
+      if (storedLoginTime) {
+        setLoginTime(storedLoginTime)
+      } else {
+        setLoginTime(new Date().toISOString())
+        localStorage.setItem('loginTime', new Date().toISOString())
       }
     }
-
     loadProfile()
+    
+    // Update time every second
+    const updateTime = () => {
+      const now = new Date()
+      setCurrentTime({
+        gmt: now.toUTCString(),
+        ist: new Date(now.toLocaleString("en-US", {timeZone: "Asia/Kolkata"})).toLocaleString(),
+      })
+    }
+    updateTime()
+    const interval = setInterval(updateTime, 1000)
+    return () => clearInterval(interval)
   }, [user])
 
-  const handleChange = (e) => {
-    const { name, value } = e.target
-    setForm((prev) => ({ ...prev, [name]: value }))
+  const loadProfile = async () => {
+    try {
+      const response = await api.get('/account/profile')
+      if (response.ok && response.data?.data) {
+        setProfile(response.data.data)
+      }
+    } catch (err) {
+      console.error('Error loading profile:', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleSave = async (e) => {
-    e.preventDefault()
-    setStatus('')
+  const handleLogout = async () => {
+    localStorage.removeItem('loginTime')
+    await logout()
+    navigate('/')
+  }
+
+  const handleUpdateName = async () => {
+    if (!companyName.trim()) {
+      setPhoneStatus('Company name cannot be empty')
+      return
+    }
     
     try {
-      // Update business profile
-      const response = await api.put('/account/profile', {
-        company_name: form.company_name,
-        registered_name: form.registered_name,
-        email: form.email,
-        phone: form.phone,
+      const response = await api.put('/user/profile', {
+        company_name: companyName.trim(),
       })
       
       if (response.ok) {
-        setStatus('Profile updated successfully')
-        setProfile(response.data?.data)
+        setEditingName(false)
         await loadUser()
+        setPhoneStatus('Name updated successfully')
+        setTimeout(() => setPhoneStatus(''), 3000)
       } else {
-        setStatus('Failed to update profile')
+        setPhoneStatus(response.error || 'Failed to update name')
       }
     } catch (err) {
-      setStatus('Error updating profile: ' + err.message)
+      setPhoneStatus('Error updating name: ' + err.message)
     }
   }
 
-  const handleSendOtp = async () => {
-    setOtpStatus('')
-    const formatted = formatE164(form.phone)
+  const handleSendPhoneOtp = async () => {
+    setPhoneStatus('')
+    const formatted = formatE164(newPhone)
     if (!formatted) {
-      setOtpStatus('Enter a valid phone with country code')
+      setPhoneStatus('Enter a valid phone with country code')
       return
     }
+    
     const res = await authService.sendPhoneChangeOtp(formatted)
-    setOtpStatus(res.ok ? 'OTP sent to phone' : res.error || 'Failed to send OTP')
+    if (res.ok) {
+      setPhoneOtpSent(true)
+      setPhoneStatus('OTP sent to your email and phone')
+    } else {
+      setPhoneStatus(res.error || 'Failed to send OTP')
+    }
   }
 
-  const handleVerifyOtp = async () => {
-    setOtpStatus('')
-    const formatted = formatE164(form.phone)
-    const res = await authService.verifyPhoneChangeOtp(formatted, otpCode.trim())
-    setOtpStatus(res.ok ? 'Phone verified and updated' : res.error || 'Invalid OTP')
+  const handleVerifyPhoneOtp = async () => {
+    setPhoneStatus('')
+    const formatted = formatE164(newPhone)
+    const res = await authService.verifyPhoneChangeOtp(formatted, phoneOtp.trim())
+    
     if (res.ok) {
+      setPhoneStatus('Phone number updated successfully')
+      setNewPhone('')
+      setPhoneOtp('')
+      setPhoneOtpSent(false)
+      setShowPhoneChange(false)
       await loadUser()
+      await loadProfile()
+      setTimeout(() => setPhoneStatus(''), 3000)
+    } else {
+      setPhoneStatus(res.error || 'Invalid OTP')
     }
+  }
+
+  const handleCancelPhoneChange = () => {
+    setShowPhoneChange(false)
+    setNewPhone('')
+    setPhoneOtp('')
+    setPhoneOtpSent(false)
+    setPhoneStatus('')
+  }
+
+  const handleSendEmailOtp = async () => {
+    setEmailStatus('')
+    if (!newEmail || !newEmail.includes('@')) {
+      setEmailStatus('Enter a valid email address')
+      return
+    }
+    
+    const res = await authService.sendEmailChangeOtp(newEmail)
+    if (res.ok) {
+      setEmailOtpSent(true)
+      setEmailStatus('OTP sent to new email address')
+    } else {
+      setEmailStatus(res.error || 'Failed to send OTP')
+    }
+  }
+
+  const handleVerifyEmailOtp = async () => {
+    setEmailStatus('')
+    const res = await authService.verifyEmailChangeOtp(newEmail, emailOtp.trim())
+    
+    if (res.ok) {
+      setEmailStatus('Email updated successfully')
+      setNewEmail('')
+      setEmailOtp('')
+      setEmailOtpSent(false)
+      setShowEmailChange(false)
+      await loadUser()
+      await loadProfile()
+      setTimeout(() => setEmailStatus(''), 3000)
+    } else {
+      setEmailStatus(res.error || 'Invalid OTP')
+    }
+  }
+
+  const handleCancelEmailChange = () => {
+    setShowEmailChange(false)
+    setNewEmail('')
+    setEmailOtp('')
+    setEmailOtpSent(false)
+    setEmailStatus('')
   }
 
   const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
 
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setPhoneStatus('Please select an image file')
+      return
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setPhoneStatus('Image size should be less than 5MB')
+      return
+    }
+
     setPhotoUploading(true)
     try {
-      // In a real app, upload to Google Drive and get URL
-      // For now, simulate with a placeholder
-      const driveUrl = `https://drive.google.com/file/d/photo-${Date.now()}/view`
-      
-      const response = await api.post('/account/profile-photo', {
-        file_type: 'profile_photo',
-        drive_url: driveUrl,
-      })
-      
-      if (response.ok) {
-        setProfile(prev => ({...prev, profile_photo_url: response.data?.data?.profile_photo_url}))
-        setStatus('Profile photo updated')
+      // TODO: Upload to Google Drive and get actual URL
+      // For now, create a data URL for preview
+      const reader = new FileReader()
+      reader.onload = async (event) => {
+        const imageDataUrl = event.target?.result
+        // Upload to Google Drive and get URL (simulated for now)
+        const driveUrl = `https://drive.google.com/file/d/photo-${Date.now()}/view`
+        
+        const response = await api.post('/account/profile-photo', {
+          file_type: 'profile_photo',
+          drive_url: driveUrl,
+        })
+        
+        if (response.ok) {
+          await loadProfile()
+          // Trigger event to refresh header
+          window.dispatchEvent(new Event('profileUpdated'))
+          setPhoneStatus('Profile photo updated successfully')
+          setTimeout(() => setPhoneStatus(''), 3000)
+        } else {
+          setPhoneStatus('Failed to upload photo: ' + (response.error || 'Unknown error'))
+        }
+        setPhotoUploading(false)
       }
+      reader.onerror = () => {
+        setPhoneStatus('Failed to read image file')
+        setPhotoUploading(false)
+      }
+      reader.readAsDataURL(file)
     } catch (err) {
-      setStatus('Failed to upload photo: ' + err.message)
-    } finally {
+      setPhoneStatus('Failed to upload photo: ' + err.message)
       setPhotoUploading(false)
     }
   }
@@ -129,196 +250,381 @@ export default function Account() {
     const file = e.target.files?.[0]
     if (!file) return
 
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setPhoneStatus('Please select an image file')
+      return
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setPhoneStatus('Image size should be less than 5MB')
+      return
+    }
+
     setLogoUploading(true)
     try {
-      // In a real app, upload to Google Drive and get URL
-      const driveUrl = `https://drive.google.com/file/d/logo-${Date.now()}/view`
-      
-      const response = await api.post('/account/company-logo', {
-        file_type: 'company_logo',
-        drive_url: driveUrl,
-      })
-      
-      if (response.ok) {
-        setProfile(prev => ({...prev, company_logo_url: response.data?.data?.company_logo_url}))
-        setStatus('Company logo updated')
+      // TODO: Upload to Google Drive and get actual URL
+      // For now, create a data URL for preview
+      const reader = new FileReader()
+      reader.onload = async (event) => {
+        const imageDataUrl = event.target?.result
+        // Upload to Google Drive and get URL (simulated for now)
+        const driveUrl = `https://drive.google.com/file/d/logo-${Date.now()}/view`
+        
+        const response = await api.post('/account/company-logo', {
+          file_type: 'company_logo',
+          drive_url: driveUrl,
+        })
+        
+        if (response.ok) {
+          await loadProfile()
+          // Trigger event to refresh header
+          window.dispatchEvent(new Event('profileUpdated'))
+          setPhoneStatus('Company logo updated successfully')
+          setTimeout(() => setPhoneStatus(''), 3000)
+        } else {
+          setPhoneStatus('Failed to upload logo: ' + (response.error || 'Unknown error'))
+        }
+        setLogoUploading(false)
       }
+      reader.onerror = () => {
+        setPhoneStatus('Failed to read image file')
+        setLogoUploading(false)
+      }
+      reader.readAsDataURL(file)
     } catch (err) {
-      setStatus('Failed to upload logo: ' + err.message)
-    } finally {
+      setPhoneStatus('Failed to upload logo: ' + err.message)
       setLogoUploading(false)
     }
   }
 
-  const planLabel = subscription?.plan ? subscription.plan.toUpperCase() : 'BASE'
-  const planStatus = subscription?.is_active ? 'Active' : 'Inactive'
+  const formatDateTime = (dateString) => {
+    if (!dateString) return '—'
+    const date = new Date(dateString)
+    return date.toLocaleString('en-IN', { 
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  if (!user) {
+    return (
+      <div className="container-custom py-10">
+        <div className="card text-center">
+          <p className="text-gray-600">Loading account information...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="container-custom py-10 space-y-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-heading font-bold text-gray-900">My Account</h1>
-        <p className="text-gray-600">Manage your profile, uploads, plan, and secure phone changes with OTP.</p>
-      </div>
-
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          {/* File Uploads Section */}
-          <div className="card">
-            <h2 className="text-xl font-heading font-semibold text-gray-900 mb-4">Your Photos</h2>
-            
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Profile Photo */}
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-24 h-24 rounded-lg bg-gray-100 border-2 border-gray-200 flex items-center justify-center overflow-hidden">
-                  {profile?.profile_photo_url ? (
-                    <img src={profile.profile_photo_url} alt="Profile" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-4xl">👤</span>
-                  )}
-                </div>
-                <div className="w-full">
-                  <label htmlFor="profile-photo" className="text-sm font-semibold text-gray-700 block mb-2">Profile Photo</label>
-                  <input
-                    id="profile-photo"
-                    type="file"
-                    accept="image/*"
-                    onChange={handlePhotoUpload}
-                    disabled={photoUploading}
-                    className="w-full text-sm"
-                  />
-                  {photoUploading && <p className="text-xs text-gray-600 mt-1">Uploading...</p>}
-                </div>
-              </div>
-
-              {/* Company Logo */}
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-24 h-24 rounded-lg bg-gray-100 border-2 border-gray-200 flex items-center justify-center overflow-hidden">
-                  {profile?.company_logo_url ? (
-                    <img src={profile.company_logo_url} alt="Logo" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-4xl">🏢</span>
-                  )}
-                </div>
-                <div className="w-full">
-                  <label htmlFor="company-logo" className="text-sm font-semibold text-gray-700 block mb-2">Company Logo</label>
-                  <input
-                    id="company-logo"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleLogoUpload}
-                    disabled={logoUploading}
-                    className="w-full text-sm"
-                  />
-                  {logoUploading && <p className="text-xs text-gray-600 mt-1">Uploading...</p>}
-                </div>
-              </div>
+    <div className="container-custom py-10">
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Welcome Section */}
+        <div className="card bg-gradient-to-r from-primary-50 to-primary-100 border-primary-200">
+          <div className="flex items-center gap-4">
+            <div className="w-20 h-20 rounded-full bg-primary-600 text-white font-heading font-bold text-2xl flex items-center justify-center shadow-md overflow-hidden">
+              {profile?.profile_photo_url ? (
+                <img src={profile.profile_photo_url} alt="Profile" className="w-full h-full object-cover" />
+              ) : user?.company_name ? (
+                user.company_name.charAt(0).toUpperCase()
+              ) : (
+                '👤'
+              )}
             </div>
-          </div>
-
-          {/* Profile Information */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-heading font-semibold text-gray-900">Profile Information</h2>
-              {loading && <p className="text-sm text-gray-500">Loading...</p>}
+            <div className="flex-1">
+              <h1 className="text-3xl font-heading font-bold text-gray-900">
+                {user?.company_name || 'Account'}
+              </h1>
+              <p className="text-gray-600 mt-1">{user?.email || 'User'}</p>
             </div>
-            {status && <div className={`text-sm mb-3 p-3 rounded-lg ${status.includes('successfully') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>{status}</div>}
-            <form className="space-y-4" onSubmit={handleSave}>
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-semibold text-gray-700" htmlFor="company_name">Company Name</label>
-                  <input
-                    id="company_name"
-                    name="company_name"
-                    value={form.company_name}
-                    onChange={handleChange}
-                    className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-semibold text-gray-700" htmlFor="registered_name">Registered Legal Name</label>
-                  <input
-                    id="registered_name"
-                    name="registered_name"
-                    value={form.registered_name}
-                    onChange={handleChange}
-                    className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
-                    required
-                  />
-                </div>
+            {profile?.company_logo_url && (
+              <div className="w-20 h-20 rounded-lg bg-white border-2 border-primary-200 flex items-center justify-center overflow-hidden shadow-md">
+                <img src={profile.company_logo_url} alt="Company Logo" className="w-full h-full object-cover" />
               </div>
-
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-semibold text-gray-700" htmlFor="email">Work Email</label>
-                  <input
-                    id="email"
-                    type="email"
-                    name="email"
-                    value={form.email}
-                    onChange={handleChange}
-                    className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-semibold text-gray-700" htmlFor="gstin">GSTIN</label>
-                  <input
-                    id="gstin"
-                    value={user?.gstin || ''}
-                    disabled
-                    className="mt-2 w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-semibold text-gray-700 flex items-center justify-between" htmlFor="phone">
-                  <span>Phone</span>
-                  <span className="text-xs text-gray-500">OTP required to confirm change</span>
-                </label>
-                <div className="mt-2 flex gap-2">
-                  <input
-                    id="phone"
-                    name="phone"
-                    value={form.phone}
-                    onChange={handleChange}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
-                    required
-                  />
-                  <button type="button" onClick={handleSendOtp} className="btn-secondary text-sm whitespace-nowrap">Send OTP</button>
-                </div>
-                <div className="mt-3 flex gap-2 items-center">
-                  <input
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
-                    placeholder="Enter OTP"
-                    value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value)}
-                  />
-                  <button type="button" onClick={handleVerifyOtp} className="btn-primary text-sm whitespace-nowrap">Verify</button>
-                </div>
-                {otpStatus && <p className="text-xs text-gray-600 mt-2">{otpStatus}</p>}
-              </div>
-
-              <div className="flex items-center gap-3 pt-2">
-                <button type="submit" className="btn-primary">Save Changes</button>
-                <a href="/membership" className="btn-secondary">Manage Plan</a>
-              </div>
-            </form>
+            )}
           </div>
         </div>
 
-        {/* Plan & Access Sidebar */}
-        <div className="card space-y-3">
-          <h2 className="text-xl font-heading font-semibold text-gray-900">Plan & Access</h2>
-          <div className="rounded-lg border border-gray-200 px-4 py-3">
-            <p className="text-sm text-gray-500">Current Plan</p>
-            <p className="text-lg font-heading font-semibold text-gray-900">{planLabel}</p>
-            <p className="text-sm text-green-700">Status: {planStatus}</p>
-            <p className="text-sm text-gray-500">Expiry: {subscription?.expiry_date?.slice(0, 10) || '—'}</p>
+        {/* Time Display */}
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="card">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">Current Time (GMT)</h3>
+            <p className="text-lg font-mono text-gray-900">{currentTime.gmt}</p>
           </div>
-          <p className="text-sm text-gray-700">Need a higher plan for advanced features? Upgrade in Membership.</p>
-          <a href="/membership" className="btn-primary w-full text-center">View Plans</a>
+          <div className="card">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">Current Time (IST)</h3>
+            <p className="text-lg font-mono text-gray-900">{currentTime.ist}</p>
+          </div>
+        </div>
+
+        {/* Login Time */}
+        {loginTime && (
+          <div className="card">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">Last Login</h3>
+            <p className="text-gray-900">{formatDateTime(loginTime)}</p>
+          </div>
+        )}
+
+        {/* Profile Image Upload */}
+        <div className="card">
+          <h2 className="text-xl font-heading font-semibold text-gray-900 mb-4">Profile Image</h2>
+          <div className="flex items-center gap-6">
+            <div className="w-24 h-24 rounded-lg bg-gray-100 border-2 border-gray-200 flex items-center justify-center overflow-hidden">
+              {profile?.profile_photo_url ? (
+                <img src={profile.profile_photo_url} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-4xl">👤</span>
+              )}
+            </div>
+            <div className="flex-1">
+              <label htmlFor="profile-photo" className="text-sm font-semibold text-gray-700 block mb-2">
+                Upload Profile Photo
+              </label>
+              <input
+                id="profile-photo"
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoUpload}
+                disabled={photoUploading}
+                className="w-full text-sm"
+              />
+              {photoUploading && <p className="text-xs text-gray-600 mt-1">Uploading...</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* Company Logo Upload */}
+        <div className="card">
+          <h2 className="text-xl font-heading font-semibold text-gray-900 mb-4">Company Logo</h2>
+          <div className="flex items-center gap-6">
+            <div className="w-24 h-24 rounded-lg bg-gray-100 border-2 border-gray-200 flex items-center justify-center overflow-hidden">
+              {profile?.company_logo_url ? (
+                <img src={profile.company_logo_url} alt="Logo" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-4xl">🏢</span>
+              )}
+            </div>
+            <div className="flex-1">
+              <label htmlFor="company-logo" className="text-sm font-semibold text-gray-700 block mb-2">
+                Upload Company Logo
+              </label>
+              <input
+                id="company-logo"
+                type="file"
+                accept="image/*"
+                onChange={handleLogoUpload}
+                disabled={logoUploading}
+                className="w-full text-sm"
+              />
+              {logoUploading && <p className="text-xs text-gray-600 mt-1">Uploading...</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* Edit Name */}
+        <div className="card">
+          <h2 className="text-xl font-heading font-semibold text-gray-900 mb-4">Company Name</h2>
+          {editingName ? (
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
+                placeholder="Company Name"
+              />
+              <div className="flex gap-2">
+                <button onClick={handleUpdateName} className="btn-primary">Save</button>
+                <button onClick={() => { setEditingName(false); setCompanyName(user.company_name || ''); }} className="btn-secondary">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <p className="text-gray-900 text-lg">{user.company_name || '—'}</p>
+              <button onClick={() => setEditingName(true)} className="btn-secondary">
+                Edit
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Change Phone Number */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-heading font-semibold text-gray-900">Mobile Number</h2>
+            {!showPhoneChange && (
+              <button onClick={() => setShowPhoneChange(true)} className="btn-secondary text-sm">
+                Change
+              </button>
+            )}
+          </div>
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-semibold text-gray-700 block mb-2">Current Phone</label>
+              <p className="text-gray-900">{user.phone || '—'}</p>
+            </div>
+            
+            {showPhoneChange && (
+              <div className="border-t border-gray-200 pt-4 space-y-3">
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 block mb-2">New Phone Number</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newPhone}
+                      onChange={(e) => setNewPhone(e.target.value)}
+                      placeholder="+91XXXXXXXXXX"
+                      disabled={phoneOtpSent}
+                      className="flex-1 rounded-lg border border-gray-300 px-4 py-3 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 disabled:bg-gray-100"
+                    />
+                    <button
+                      onClick={handleSendPhoneOtp}
+                      disabled={phoneOtpSent}
+                      className="btn-secondary whitespace-nowrap disabled:opacity-50"
+                    >
+                      {phoneOtpSent ? 'Sent ✓' : 'Send OTP'}
+                    </button>
+                  </div>
+                </div>
+                {phoneOtpSent && (
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 block mb-2">Enter OTP</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        maxLength={6}
+                        value={phoneOtp}
+                        onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, ''))}
+                        placeholder="000000"
+                        className="flex-1 rounded-lg border border-gray-300 px-4 py-3 text-center text-xl tracking-widest font-mono focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
+                      />
+                      <button onClick={handleVerifyPhoneOtp} className="btn-primary whitespace-nowrap">
+                        Verify
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {phoneStatus && (
+                  <p className={`text-sm ${phoneStatus.includes('success') || phoneStatus.includes('sent') ? 'text-green-600' : 'text-red-600'}`}>
+                    {phoneStatus}
+                  </p>
+                )}
+                <div className="flex gap-2 pt-2">
+                  <button onClick={handleCancelPhoneChange} className="btn-secondary">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Change Email */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-heading font-semibold text-gray-900">Email</h2>
+            {!showEmailChange && (
+              <button onClick={() => setShowEmailChange(true)} className="btn-secondary text-sm">
+                Change
+              </button>
+            )}
+          </div>
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-semibold text-gray-700 block mb-2">Current Email</label>
+              <p className="text-gray-900">{user.email || '—'}</p>
+            </div>
+            
+            {showEmailChange && (
+              <div className="border-t border-gray-200 pt-4 space-y-3">
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 block mb-2">New Email Address</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      placeholder="new@email.com"
+                      disabled={emailOtpSent}
+                      className="flex-1 rounded-lg border border-gray-300 px-4 py-3 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 disabled:bg-gray-100"
+                    />
+                    <button
+                      onClick={handleSendEmailOtp}
+                      disabled={emailOtpSent}
+                      className="btn-secondary whitespace-nowrap disabled:opacity-50"
+                    >
+                      {emailOtpSent ? 'Sent ✓' : 'Send OTP'}
+                    </button>
+                  </div>
+                </div>
+                {emailOtpSent && (
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 block mb-2">Enter OTP</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        maxLength={6}
+                        value={emailOtp}
+                        onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ''))}
+                        placeholder="000000"
+                        className="flex-1 rounded-lg border border-gray-300 px-4 py-3 text-center text-xl tracking-widest font-mono focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
+                      />
+                      <button onClick={handleVerifyEmailOtp} className="btn-primary whitespace-nowrap">
+                        Verify
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {emailStatus && (
+                  <p className={`text-sm ${emailStatus.includes('success') || emailStatus.includes('sent') ? 'text-green-600' : 'text-red-600'}`}>
+                    {emailStatus}
+                  </p>
+                )}
+                <div className="flex gap-2 pt-2">
+                  <button onClick={handleCancelEmailChange} className="btn-secondary">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Account Information */}
+        <div className="card">
+          <h2 className="text-xl font-heading font-semibold text-gray-900 mb-4">Account Information</h2>
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-semibold text-gray-700">GSTIN</label>
+              <p className="text-gray-900 mt-1">{user.gstin || '—'}</p>
+            </div>
+            <div>
+              <label className="text-sm font-semibold text-gray-700">Role</label>
+              <p className="text-gray-900 mt-1 capitalize">{user.role || 'User'}</p>
+            </div>
+            <div>
+              <label className="text-sm font-semibold text-gray-700">Account Created</label>
+              <p className="text-gray-900 mt-1">{formatDateTime(user.created_at)}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Logout */}
+        <div className="card">
+          <button
+            onClick={handleLogout}
+            className="btn-primary w-full"
+          >
+            Logout
+          </button>
         </div>
       </div>
     </div>

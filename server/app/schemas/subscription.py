@@ -10,6 +10,7 @@ class PlanResponse(BaseModel):
     name: str
     display_name: str
     description: Optional[str] = None
+    duration_type: str  # "monthly" or "yearly"
     price: float
     validity_days: int
     follow_up_limit: int
@@ -32,9 +33,11 @@ class SubscriptionResponse(BaseModel):
     id: str
     user_id: str
     plan_id: str
+    status: str  # "active", "expired", "cancelled"
     is_active: bool
     start_date: datetime
     expiry_date: Optional[datetime] = None
+    payment_id: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     plan: Optional[PlanResponse] = None

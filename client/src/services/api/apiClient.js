@@ -59,6 +59,16 @@ async function apiRequest(endpoint, options = {}) {
 
     // Handle other errors
     if (!response.ok) {
+      // Check for database connection errors
+      if (response.status === 503 && data?.error?.code === 'DATABASE_CONNECTION_ERROR') {
+        return {
+          ok: false,
+          status: 503,
+          error: 'Database connection failed. Please ensure the database is running and configured correctly.',
+          data: null,
+        }
+      }
+      
       return {
         ok: false,
         status: response.status,
@@ -149,6 +159,8 @@ export const user = {
   getSubscription: () => apiRequest('/user/subscription'),
   sendPhoneChangeOtp: (data) => apiRequest('/user/phone-change/send-otp', { method: 'POST', body: JSON.stringify(data) }),
   verifyPhoneChangeOtp: (data) => apiRequest('/user/phone-change/verify-otp', { method: 'POST', body: JSON.stringify(data) }),
+  sendEmailChangeOtp: (data) => apiRequest('/user/email-change/send-otp', { method: 'POST', body: JSON.stringify(data) }),
+  verifyEmailChangeOtp: (data) => apiRequest('/user/email-change/verify-otp', { method: 'POST', body: JSON.stringify(data) }),
 }
 
 export const purchaseOrders = {

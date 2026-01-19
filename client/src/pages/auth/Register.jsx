@@ -3,10 +3,12 @@ import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { formatE164 } from '../../utils/phone'
 import { isValidGstin } from '../../utils/validation'
+import { useAuth } from '../../state/authContext'
 import authService from '../../services/authService'
 
 export default function Register() {
   const navigate = useNavigate()
+  const { loadUser } = useAuth()
   const [form, setForm] = useState({
     company: '',
     email: '',
@@ -16,6 +18,9 @@ export default function Register() {
     gstin: '',
     accepts: false,
   })
+  const [otpCode, setOtpCode] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [sendingOtp, setSendingOtp] = useState(false)
 
   const [status, setStatus] = useState({ type: '', message: '' })
   const [submitting, setSubmitting] = useState(false)
@@ -25,9 +30,78 @@ export default function Register() {
     setForm({ ...form, [e.target.name]: value })
   }
 
+  const handleSendOtp = async () => {
+    setStatus({ type: '', message: '' })
+    
+    // Validate email and phone first
+    if (!form.email || !form.email.includes('@')) {
+      setStatus({ type: 'error', message: 'Please enter a valid email address' })
+      return
+    }
+
+    const phoneE164 = formatE164(form.phone)
+    if (!phoneE164) {
+      setStatus({ type: 'error', message: 'Enter a valid phone number with country code (e.g., +91XXXXXXXXXX)' })
+      return
+    }
+
+    setSendingOtp(true)
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/auth/register/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          email: form.email.trim().toLowerCase(),
+          phone: phoneE164,
+        }),
+      })
+      
+      const data = await response.json()
+      
+      if (response.ok && data.success) {
+        setOtpSent(true)
+        setStatus({ 
+          type: 'success', 
+          message: data.message || 'OTP sent to your email and phone. Check your inbox/SMS.' 
+        })
+        // In dev mode, show OTP in console
+        if (data.data?.otp_code) {
+          console.log('OTP Code (dev):', data.data.otp_code)
+          setStatus({ 
+            type: 'success', 
+            message: `OTP sent! Check console for OTP code: ${data.data.otp_code}` 
+          })
+        }
+      } else {
+        setStatus({ type: 'error', message: data.error?.message || data.message || 'Failed to send OTP' })
+      }
+    } catch (error) {
+      setStatus({ type: 'error', message: 'Network error: ' + error.message })
+    } finally {
+      setSendingOtp(false)
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setStatus({ type: '', message: '' })
+
+    // Validation
+    if (!form.company || form.company.trim().length < 2) {
+      setStatus({ type: 'error', message: 'Company name must be at least 2 characters' })
+      return
+    }
+
+    if (!form.email || !form.email.includes('@') || !form.email.includes('.')) {
+      setStatus({ type: 'error', message: 'Please enter a valid email address' })
+      return
+    }
+
+    if (!form.password || form.password.length < 6) {
+      setStatus({ type: 'error', message: 'Password must be at least 6 characters' })
+      return
+    }
 
     if (form.password !== form.confirm) {
       setStatus({ type: 'error', message: 'Passwords do not match' })
@@ -36,12 +110,12 @@ export default function Register() {
 
     const phoneE164 = formatE164(form.phone)
     if (!phoneE164) {
-      setStatus({ type: 'error', message: 'Enter a valid phone with country code' })
+      setStatus({ type: 'error', message: 'Enter a valid phone number with country code (e.g., +91XXXXXXXXXX)' })
       return
     }
 
     if (!isValidGstin(form.gstin)) {
-      setStatus({ type: 'error', message: 'Enter a valid GSTIN' })
+      setStatus({ type: 'error', message: 'Enter a valid GSTIN (15 characters, format: 22AAAAA0000A1Z5)' })
       return
     }
 
@@ -50,22 +124,35 @@ export default function Register() {
       return
     }
 
+    if (!otpSent) {
+      setStatus({ type: 'error', message: 'Please verify your email and phone by sending OTP first' })
+      return
+    }
+
+    if (!otpCode || otpCode.length !== 6) {
+      setStatus({ type: 'error', message: 'Please enter the 6-digit OTP code' })
+      return
+    }
+
     setSubmitting(true)
     try {
       const response = await authService.register({
-        company_name: form.company,
-        email: form.email,
+        company_name: form.company.trim(),
+        email: form.email.trim().toLowerCase(),
         password: form.password,
         phone: phoneE164,
-        gstin: form.gstin,
+        gstin: form.gstin.trim().toUpperCase(),
+        otp_code: otpCode.trim(),
       })
 
       if (response.ok) {
-        setStatus({ type: 'success', message: 'Account created! Redirecting to login...' })
-        // Redirect to login after short delay
-        setTimeout(() => navigate('/auth/login'), 1500)
+        setStatus({ type: 'success', message: 'Account created successfully! Logging you in...' })
+        // Backend returns tokens in cookies, so we can auto-login
+        await loadUser()
+        // Redirect to dashboard after short delay
+        setTimeout(() => navigate('/dashboard'), 1000)
       } else {
-        setStatus({ type: 'error', message: response.error || 'Registration failed' })
+        setStatus({ type: 'error', message: response.error || 'Registration failed. Please check your information and try again.' })
       }
     } catch (error) {
       setStatus({ type: 'error', message: 'Network error: ' + error.message })
@@ -133,8 +220,10 @@ export default function Register() {
                   value={form.password}
                   onChange={handleChange}
                   required
+                  minLength={6}
                   className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                 />
+                <p className="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
               </div>
               <div>
                 <label htmlFor="confirm" className="text-sm font-semibold text-gray-700">Confirm Password</label>
@@ -153,14 +242,27 @@ export default function Register() {
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="phone" className="text-sm font-semibold text-gray-700">Phone</label>
-                <input
-                  id="phone"
-                  name="phone"
-                  value={form.phone}
-                  onChange={handleChange}
-                  required
-                  className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
-                />
+                <div className="mt-2 flex gap-2">
+                  <input
+                    id="phone"
+                    name="phone"
+                    value={form.phone}
+                    onChange={handleChange}
+                    required
+                    placeholder="+91XXXXXXXXXX"
+                    disabled={otpSent}
+                    className="flex-1 rounded-lg border border-gray-300 px-4 py-3 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 disabled:bg-gray-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSendOtp}
+                    disabled={sendingOtp || otpSent}
+                    className="btn-secondary whitespace-nowrap disabled:opacity-50"
+                  >
+                    {sendingOtp ? 'Sending...' : otpSent ? 'Sent ✓' : 'Send OTP'}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Include country code (e.g., +91 for India)</p>
               </div>
               <div>
                 <label htmlFor="gstin" className="text-sm font-semibold text-gray-700">GSTIN (mandatory)</label>
@@ -176,6 +278,29 @@ export default function Register() {
                 <p className="text-xs text-gray-500 mt-1">GSTIN will be validated and revalidated periodically.</p>
               </div>
             </div>
+
+            {/* OTP Verification */}
+            {otpSent && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <label htmlFor="otp" className="text-sm font-semibold text-gray-700 block mb-2">
+                  Enter OTP Code (sent to your email and phone)
+                </label>
+                <input
+                  id="otp"
+                  name="otp"
+                  type="text"
+                  maxLength={6}
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                  placeholder="000000"
+                  className="w-full rounded-lg border border-blue-300 px-4 py-3 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 text-center text-2xl tracking-widest font-mono"
+                  required
+                />
+                <p className="text-xs text-gray-600 mt-2">
+                  Check your email inbox and SMS for the 6-digit OTP code
+                </p>
+              </div>
+            )}
 
             <label className="flex items-start gap-3 text-sm text-gray-700">
               <input

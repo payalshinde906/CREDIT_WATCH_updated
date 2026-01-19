@@ -11,7 +11,7 @@ from app.config import settings
 from app.database import engine, Base
 from app.middleware import ErrorHandlerMiddleware, RequestIDMiddleware, RateLimitMiddleware
 from app.routes import auth, drive, core, admin, subscriptions, business_profile, invoices, appointments, contact, wallet
-from app.routes import cms
+from app.routes import cms, payments, user_settings
 
 # Configure logging
 logging.basicConfig(
@@ -86,6 +86,8 @@ app.include_router(drive.router, prefix=f"{API_PREFIX}/drive", tags=["Google Dri
 app.include_router(wallet.router, prefix=API_PREFIX, tags=["Wallet"])
 app.include_router(admin.router, prefix=f"{API_PREFIX}/admin", tags=["Admin"])
 app.include_router(cms.router, prefix=API_PREFIX, tags=["CMS"])
+app.include_router(payments.router, prefix=f"{API_PREFIX}/payments", tags=["Payments"])
+app.include_router(user_settings.router, prefix=f"{API_PREFIX}/user/settings", tags=["User Settings"])
 
 
 @app.get("/health")
@@ -104,13 +106,3 @@ async def root():
         "health": "/health"
     }
 
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=settings.ENVIRONMENT == "development",
-        log_level=settings.LOG_LEVEL.lower(),
-    )

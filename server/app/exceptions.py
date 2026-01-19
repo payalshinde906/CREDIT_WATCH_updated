@@ -92,3 +92,8 @@ class NotFoundException(AppException):
 class BadRequestException(AppException):
     def __init__(self, message: str = "Bad request"):
         super().__init__("BAD_REQUEST", message, 400)
+
+
+class DatabaseConnectionError(AppException):
+    def __init__(self, message: str = "Database connection failed"):
+        super().__init__("DATABASE_CONNECTION_ERROR", message, 503)

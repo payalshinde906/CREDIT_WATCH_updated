@@ -8,6 +8,37 @@ import enum
 
 from app.database import Base
 
+
+# Enums for membership and payment system
+class MembershipStatus(str, enum.Enum):
+    """Membership subscription status"""
+    ACTIVE = "active"
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"
+
+
+class PaymentStatus(str, enum.Enum):
+    """Payment transaction status"""
+    PENDING = "pending"
+    SUCCESS = "success"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class PaymentMethod(str, enum.Enum):
+    """Payment methods supported"""
+    UPI = "upi"
+    CREDIT_CARD = "credit_card"
+    DEBIT_CARD = "debit_card"
+    NET_BANKING = "net_banking"
+    QR_CODE = "qr_code"
+
+
+class DurationType(str, enum.Enum):
+    """Plan duration types"""
+    MONTHLY = "monthly"
+    YEARLY = "yearly"
+
 CASCADE_DELETE_ORPHAN = "all, delete-orphan"
 USER_ID_FK = "users.id"
 ONDELETE_CASCADE = "CASCADE"
@@ -31,6 +62,8 @@ class User(Base):
 
     # Relationships
     subscription = relationship("Subscription", back_populates="user", uselist=False, cascade=CASCADE_DELETE_ORPHAN)
+    payments = relationship("Payment", back_populates="user", cascade=CASCADE_DELETE_ORPHAN)
+    settings = relationship("UserSettings", back_populates="user", uselist=False, cascade=CASCADE_DELETE_ORPHAN)
     business_profiles = relationship("BusinessProfile", back_populates="user", cascade=CASCADE_DELETE_ORPHAN)
     purchase_orders = relationship("PurchaseOrder", back_populates="user", cascade=CASCADE_DELETE_ORPHAN)
     invoices = relationship("Invoice", back_populates="user", cascade=CASCADE_DELETE_ORPHAN)
@@ -55,18 +88,22 @@ class Subscription(Base):
     id = Column(String(36), primary_key=True, index=True)
     user_id = Column(String(36), ForeignKey(USER_ID_FK, ondelete=ONDELETE_CASCADE), nullable=False, index=True)
     plan_id = Column(String(36), ForeignKey("plans.id"), nullable=False, index=True)
+    status = Column(Enum(MembershipStatus), default=MembershipStatus.ACTIVE, nullable=False, index=True)
     is_active = Column(Boolean, default=True, index=True)
     start_date = Column(DateTime, default=datetime.utcnow, nullable=False)
     expiry_date = Column(DateTime, nullable=True, index=True)
+    payment_id = Column(String(36), ForeignKey("payments.id"), nullable=True, index=True)  # Link to successful payment
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     user = relationship("User", back_populates="subscription")
     plan = relationship("Plan", back_populates="subscriptions")
+    payment = relationship("Payment", back_populates="subscription", foreign_keys=[payment_id])
 
     __table_args__ = (
         Index("idx_subscription_user_active", "user_id", "is_active"),
+        Index("idx_subscription_status", "status"),
     )
 
 
@@ -76,11 +113,12 @@ class Plan(Base):
     __tablename__ = "plans"
 
     id = Column(String(36), primary_key=True, index=True)
-    name = Column(String(100), nullable=False, unique=True, index=True)  # base, royal, groups, enterprise
-    display_name = Column(String(100), nullable=False)  # "Base", "Royal", etc.
+    name = Column(String(100), nullable=False, unique=True, index=True)  # basic, pro, premium
+    display_name = Column(String(100), nullable=False)  # "Basic", "Pro", "Premium"
     description = Column(Text, nullable=True)
+    duration_type = Column(Enum(DurationType), default=DurationType.MONTHLY, nullable=False, index=True)  # monthly, yearly
     price = Column(Float, nullable=False, default=0)  # in INR
-    validity_days = Column(Integer, nullable=False, default=30)
+    validity_days = Column(Integer, nullable=False, default=30)  # Calculated from duration_type
     follow_up_limit = Column(Integer, nullable=False, default=10)  # max follow-ups per case
     legal_assistance_limit = Column(Integer, nullable=False, default=2)  # max legal escalations per case
     is_active = Column(Boolean, default=True, index=True)
@@ -92,6 +130,7 @@ class Plan(Base):
 
     __table_args__ = (
         Index("idx_plan_active", "is_active"),
+        Index("idx_plan_duration", "duration_type", "is_active"),
     )
 
 
@@ -360,4 +399,60 @@ class CMSSection(Base):
 
     __table_args__ = (
         Index("idx_cms_section_page_order", "page_id", "order_index"),
+    )
+
+
+class Payment(Base):
+    """Payment transaction model"""
+
+    __tablename__ = "payments"
+
+    id = Column(String(36), primary_key=True, index=True)
+    user_id = Column(String(36), ForeignKey(USER_ID_FK, ondelete=ONDELETE_CASCADE), nullable=False, index=True)
+    plan_id = Column(String(36), ForeignKey("plans.id"), nullable=False, index=True)
+    amount = Column(Float, nullable=False)  # in INR
+    currency = Column(String(10), default="INR", nullable=False)
+    payment_method = Column(Enum(PaymentMethod), nullable=False, index=True)
+    payment_provider = Column(String(50), nullable=True)  # "razorpay", "payu", "stripe", etc.
+    status = Column(Enum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False, index=True)
+    transaction_id = Column(String(255), unique=True, nullable=True, index=True)  # Gateway transaction ID
+    reference_id = Column(String(255), unique=True, nullable=False, index=True)  # Internal reference
+    gateway_order_id = Column(String(255), nullable=True)  # Payment gateway order ID
+    gateway_payment_id = Column(String(255), nullable=True)  # Payment ID from gateway
+    failure_reason = Column(Text, nullable=True)  # If failed
+    payment_metadata = Column(JSON, default=dict)  # Additional payment data (card last 4 digits, UPI ID, etc.)
+    initiated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="payments")
+    plan = relationship("Plan")
+    subscription = relationship("Subscription", back_populates="payment", uselist=False)
+
+    __table_args__ = (
+        Index("idx_payment_user_status", "user_id", "status"),
+        Index("idx_payment_status_created", "status", "created_at"),
+    )
+
+
+class UserSettings(Base):
+    """User settings and preferences model"""
+
+    __tablename__ = "user_settings"
+
+    id = Column(String(36), primary_key=True, index=True)
+    user_id = Column(String(36), ForeignKey(USER_ID_FK, ondelete=ONDELETE_CASCADE), nullable=False, unique=True, index=True)
+    theme_preference = Column(String(20), default="system", nullable=False)  # "light", "dark", "system"
+    language = Column(String(10), default="en", nullable=False)
+    notifications_enabled = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="settings")
+
+    __table_args__ = (
+        Index("idx_user_settings_user", "user_id"),
     )

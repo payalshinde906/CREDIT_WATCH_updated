@@ -13,6 +13,14 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=6, max_length=255)
     phone: str = Field(..., min_length=10, max_length=20)
     gstin: str = Field(..., min_length=15, max_length=15)
+    otp_code: Optional[str] = Field(None, min_length=4, max_length=10)  # OTP for verification
+
+
+class RegisterSendOTPRequest(BaseModel):
+    """Send OTP for registration"""
+
+    email: EmailStr
+    phone: str = Field(..., min_length=10, max_length=20)
 
 
 class LoginRequest(BaseModel):

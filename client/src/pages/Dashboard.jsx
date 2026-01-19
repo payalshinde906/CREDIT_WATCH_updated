@@ -285,10 +285,7 @@ export default function Dashboard() {
             </div>
 
             {/* Notifications */}
-            <div className="card">
-              <h2 className="text-xl font-heading font-semibold text-gray-900 mb-4">Notifications</h2>
-              <NotificationsPanel />
-            </div>
+            <NotificationsPanel dueReminders={dueReminders} />
 
             {/* Plan Info */}
             <div className="card space-y-2 text-sm text-gray-700">

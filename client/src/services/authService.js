@@ -19,6 +19,7 @@ export async function register(userData) {
     password: userData.password,
     phone: userData.phone,
     gstin: userData.gstin,
+    otp_code: userData.otp_code,
   })
 }
 
@@ -148,6 +149,30 @@ export async function verifyPhoneChangeOtp(new_phone, otp_code) {
 }
 
 /**
+ * Send OTP for email change
+ * @param {string} new_email - New email address
+ * @returns {Promise<{ok: boolean, message?: string, error?: string}>}
+ */
+export async function sendEmailChangeOtp(new_email) {
+  return userApi.sendEmailChangeOtp({
+    new_email,
+  })
+}
+
+/**
+ * Verify OTP and update email address
+ * @param {string} new_email - New email address
+ * @param {string} otp_code - OTP code (6 digits)
+ * @returns {Promise<{ok: boolean, data?: object, error?: string}>}
+ */
+export async function verifyEmailChangeOtp(new_email, otp_code) {
+  return userApi.verifyEmailChangeOtp({
+    new_email,
+    otp_code,
+  })
+}
+
+/**
  * Check if user is currently authenticated
  * Attempts to fetch user profile - returns true if successful
  * @returns {Promise<boolean>}
@@ -177,6 +202,8 @@ export default {
   verifyPhoneOtp,
   sendPhoneChangeOtp,
   verifyPhoneChangeOtp,
+  sendEmailChangeOtp,
+  verifyEmailChangeOtp,
   isAuthenticated,
   refreshToken,
   sendPasswordResetOtp,
