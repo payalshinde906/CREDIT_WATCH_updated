@@ -54,18 +54,27 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
-# Middleware (CORS must be first to add headers to all responses including errors)
+# Ensure dev origins are always allowed (e.g. if .env only has 3000, frontend on 3001 would be blocked)
+_dev_origins = ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173", "http://localhost:3002"]
+_cors_origins = list(settings.CORS_ORIGINS) if settings.CORS_ORIGINS else []
+for origin in _dev_origins:
+    if origin not in _cors_origins:
+        _cors_origins.append(origin)
+
+# Middleware: add in reverse order of execution. Last added runs first.
+# CORS is added last so it runs first and handles preflight OPTIONS before TrustedHost.
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(RequestIDMiddleware)
+app.add_middleware(ErrorHandlerMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
-app.add_middleware(ErrorHandlerMiddleware)
-app.add_middleware(RequestIDMiddleware)
-app.add_middleware(RateLimitMiddleware)
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
 
 # API prefix constant
 API_PREFIX = "/api/v1"

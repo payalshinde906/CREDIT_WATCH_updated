@@ -98,8 +98,15 @@ export default function Register() {
       return
     }
 
-    if (!form.password || form.password.length < 6) {
-      setStatus({ type: 'error', message: 'Password must be at least 6 characters' })
+    // Password validation - minimum 8 characters
+    if (!form.password || form.password.trim().length < 8) {
+      setStatus({ type: 'error', message: 'Password must be at least 8 characters' })
+      return
+    }
+
+    // Password validation - maximum 64 characters
+    if (form.password.trim().length > 64) {
+      setStatus({ type: 'error', message: 'Password must be less than 64 characters' })
       return
     }
 
@@ -139,7 +146,7 @@ export default function Register() {
       const response = await authService.register({
         company_name: form.company.trim(),
         email: form.email.trim().toLowerCase(),
-        password: form.password,
+        password: form.password.trim(),
         phone: phoneE164,
         gstin: form.gstin.trim().toUpperCase(),
         otp_code: otpCode.trim(),
@@ -147,9 +154,7 @@ export default function Register() {
 
       if (response.ok) {
         setStatus({ type: 'success', message: 'Account created successfully! Logging you in...' })
-        // Backend returns tokens in cookies, so we can auto-login
         await loadUser()
-        // Redirect to dashboard after short delay
         setTimeout(() => navigate('/dashboard'), 1000)
       } else {
         setStatus({ type: 'error', message: response.error || 'Registration failed. Please check your information and try again.' })
@@ -220,10 +225,11 @@ export default function Register() {
                   value={form.password}
                   onChange={handleChange}
                   required
-                  minLength={6}
+                  minLength={8}
+                  maxLength={64}
                   className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                 />
-                <p className="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
+                <p className="text-xs text-gray-500 mt-1">Minimum 8 characters, maximum 64</p>
               </div>
               <div>
                 <label htmlFor="confirm" className="text-sm font-semibold text-gray-700">Confirm Password</label>

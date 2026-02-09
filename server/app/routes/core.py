@@ -75,7 +75,7 @@ async def send_phone_change_otp(req: dict, current_user: User = Depends(get_curr
     
     # Send OTP via SMS (if configured) or email
     # Pass user email so OTP can be sent via email if SMS fails
-    result = await OTPService.send_otp(phone_e164, "phone_change", email=current_user.email)
+    result = await OTPService.send_otp(phone_e164, purpose="phone_change", email=current_user.email)
     
     return ResponseFormatter.create_success(data={"sent": result["sent"], "message": result.get("message", "OTP sent")})
 
@@ -98,7 +98,7 @@ async def verify_phone_change_otp(req: dict, current_user: User = Depends(get_cu
     phone_e164 = format_phone_e164(new_phone) or new_phone
     
     # Verify OTP
-    await OTPService.verify_otp(phone_e164, otp_code)
+    await OTPService.verify_otp(phone_e164, otp_code, purpose="phone_change")
     
     # Change phone
     await UserService.change_phone(current_user.id, phone_e164, db)

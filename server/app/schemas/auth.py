@@ -10,10 +10,10 @@ class RegisterRequest(BaseModel):
 
     company_name: str = Field(..., min_length=2, max_length=255)
     email: EmailStr
-    password: str = Field(..., min_length=6, max_length=255)
+    password: str = Field(..., min_length=8, max_length=64)
     phone: str = Field(..., min_length=10, max_length=20)
     gstin: str = Field(..., min_length=15, max_length=15)
-    otp_code: Optional[str] = Field(None, min_length=4, max_length=10)  # OTP for verification
+    otp_code: Optional[str] = Field(None, min_length=4, max_length=10)
 
 
 class RegisterSendOTPRequest(BaseModel):
@@ -24,11 +24,10 @@ class RegisterSendOTPRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    """User login request"""
-
     email: EmailStr
-    password: str
+    password: str = Field(..., min_length=8, max_length=64)
     gstin: str
+
 
 
 class TokenResponse(BaseModel):

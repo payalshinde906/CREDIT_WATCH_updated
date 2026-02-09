@@ -42,21 +42,27 @@ async def get_profile(
             user_id=current_user.id,
             db=db,
         )
-        
+        await db.commit()
+
+        def _dt_iso(dt):
+            if dt is None:
+                return None
+            return dt.isoformat() if hasattr(dt, "isoformat") and callable(getattr(dt, "isoformat")) else str(dt)
+
         return ResponseFormatter.create_success(
             message="Profile retrieved",
             data={
                 "id": profile.id,
                 "user_id": profile.user_id,
-                "name": profile.name,
-                "registered_name": profile.registered_name,
-                "email": profile.email,
-                "phone": profile.phone,
-                "gstin": profile.gstin,
-                "profile_photo_url": profile.profile_photo_url,
-                "company_logo_url": profile.company_logo_url,
-                "created_at": profile.created_at.isoformat(),
-                "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
+                "name": profile.name or "",
+                "registered_name": profile.registered_name or "",
+                "email": profile.email or "",
+                "phone": profile.phone or "",
+                "gstin": profile.gstin or "",
+                "profile_photo_url": getattr(profile, "profile_photo_url", None) or None,
+                "company_logo_url": getattr(profile, "company_logo_url", None) or None,
+                "created_at": _dt_iso(getattr(profile, "created_at", None)),
+                "updated_at": _dt_iso(getattr(profile, "updated_at", None)),
             },
         )
     except UserNotFound:
@@ -65,7 +71,8 @@ async def get_profile(
             detail="User not found",
         )
     except Exception as e:
-        logger.error(f"Error getting profile: {str(e)}")
+        await db.rollback()
+        logger.exception("Error getting profile")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get profile",
