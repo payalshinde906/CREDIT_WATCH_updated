@@ -1,16 +1,16 @@
-/**
- * API Client with Cookie-Based Authentication
- * 
- * Features:
- * - Automatically sends cookies with requests (credentials: 'include')
- * - Handles JWT token refresh on 401 responses
- * - Consistent error response format
- * - Request/response interceptors for logging
- * - Base URL from environment or localhost:8000
- */
-
-// Base API configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+const RAW_BASE = import.meta.env.VITE_API_URL || '/api/v1'
+const API_BASE_URL = (() => {
+  let u = (RAW_BASE || '').trim()
+  if (!u) return '/api/v1'
+  if (u.startsWith('/')) return u.replace(/\/+$/, '')
+  if (u.startsWith(':')) u = 'http://localhost' + u
+  if (!u.startsWith('http://') && !u.startsWith('https://')) u = 'http://' + u
+  if (!/\/api\/v1\/?$/.test(u)) {
+    if (u.endsWith('/')) u += 'api/v1'
+    else if (!/\/api\/v1/.test(u)) u += '/api/v1'
+  }
+  return u.replace(/\/+$/, '')
+})()
 
 /**
  * Make an authenticated API request with cookie support
@@ -52,7 +52,7 @@ async function apiRequest(endpoint, options = {}) {
       return {
         ok: false,
         status: 401,
-        error: data?.error?.message || 'Unauthorized - please login again',
+        error: data?.error?.message || data?.detail || 'Unauthorized - please login again',
         data: null,
       }
     }
@@ -72,7 +72,7 @@ async function apiRequest(endpoint, options = {}) {
       return {
         ok: false,
         status: response.status,
-        error: data?.error?.message || data?.message || `HTTP ${response.status}`,
+        error: data?.error?.message || data?.message || data?.detail || `HTTP ${response.status}`,
         data: null,
       }
     }
@@ -151,6 +151,8 @@ export const auth = {
   sendPasswordResetOtp: (data) => apiRequest('/auth/password/send-otp', { method: 'POST', body: JSON.stringify(data) }),
   verifyPasswordResetOtp: (data) => apiRequest('/auth/password/verify-otp', { method: 'POST', body: JSON.stringify(data) }),
   resetPassword: (data) => apiRequest('/auth/password/reset', { method: 'POST', body: JSON.stringify(data) }),
+  sendEmailLoginOtp: (data) => apiRequest('/auth/login/send-email-otp', { method: 'POST', body: JSON.stringify(data) }),
+  verifyEmailLoginOtp: (data) => apiRequest('/auth/login/verify-email-otp', { method: 'POST', body: JSON.stringify(data) }),
 }
 
 export const user = {

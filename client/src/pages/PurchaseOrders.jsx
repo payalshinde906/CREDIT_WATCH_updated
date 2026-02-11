@@ -76,6 +76,7 @@ export default function PurchaseOrders() {
     setRows((prev) => [res.data, ...prev])
     setForm({ number: '', vendor_name: '', vendor_gstin: '', amount: '', due_date: '', status: 'open', document_url: '' })
     setStatusMessage('PO saved to backend successfully.')
+    window.dispatchEvent(new Event('poChanged'))
   }
 
     const handleEdit = (po) => {
@@ -87,6 +88,7 @@ export default function PurchaseOrders() {
       if (res.ok) {
         setRows((prev) => prev.map(r => r.id === editingPO.id ? { ...r, ...payload } : r))
         setStatusMessage('PO updated successfully.')
+        window.dispatchEvent(new Event('poChanged'))
         return true
       }
       return false
@@ -102,6 +104,7 @@ export default function PurchaseOrders() {
       if (res.ok) {
         setRows((prev) => prev.filter(r => r.id !== deleteConfirm.id))
         setStatusMessage('PO deleted permanently.')
+        window.dispatchEvent(new Event('poChanged'))
       } else {
         setStatusMessage(res.error || 'Failed to delete PO')
       }
@@ -113,6 +116,7 @@ export default function PurchaseOrders() {
       if (res.ok) {
         setRows((prev) => prev.map(r => r.id === po.id ? { ...r, is_archived: !r.is_archived } : r))
         setStatusMessage(po.is_archived ? 'PO restored from archive.' : 'PO archived.')
+        window.dispatchEvent(new Event('poChanged'))
       } else {
         setStatusMessage(res.error || 'Failed to archive PO')
       }
@@ -129,6 +133,7 @@ export default function PurchaseOrders() {
       }
       setLoading(false)
       setStatusMessage('CSV import completed.')
+      window.dispatchEvent(new Event('poChanged'))
     }
   return (
     <section className="section-padding">

@@ -125,7 +125,7 @@ async def send_email_change_otp(req: dict, current_user: User = Depends(get_curr
     result = await OTPService.send_otp_for_email_change(new_email, current_user.email)
     
     return ResponseFormatter.create_success(
-        data={"sent": result["sent"], "otp_code": result.get("otp_code")},  # otp_code only in dev
+        data={"sent": result["sent"]},
         message=result.get("message", "OTP sent to both email addresses")
     )
 
@@ -186,6 +186,11 @@ async def create_po(req: dict, current_user: User = Depends(get_current_user), d
         amount=req["amount"],
         due_date=req["due_date"],
         status=req.get("status", "Open"),
+        notes=req.get("notes"),
+        document_url=req.get("document_url"),
+        supplier_address=req.get("supplier_address"),
+        delivery_address=req.get("delivery_address"),
+        invoice_address=req.get("invoice_address"),
     )
     db.add(po)
     await db.commit()
@@ -201,16 +206,20 @@ async def list_pos(current_user: User = Depends(get_current_user), db: AsyncSess
     result = await db.execute(stmt)
     pos = result.scalars().all()
     return ResponseFormatter.create_success(data=[{
-        "id": p.id, 
-        "number": p.number, 
-        "vendor_name": p.vendor_name, 
+        "id": p.id,
+        "number": p.number,
+        "vendor_name": p.vendor_name,
         "vendor_gstin": p.vendor_gstin,
-        "amount": p.amount, 
+        "amount": p.amount,
         "due_date": p.due_date.isoformat() if p.due_date else None,
         "status": p.status,
         "is_archived": p.is_archived,
+        "document_url": p.document_url,
         "notes": p.notes,
-        "created_at": p.created_at.isoformat() if p.created_at else None
+        "supplier_address": p.supplier_address,
+        "delivery_address": p.delivery_address,
+        "invoice_address": p.invoice_address,
+        "created_at": p.created_at.isoformat() if p.created_at else None,
     } for p in pos])
 
 @po_router.get("/{po_id}")
@@ -232,6 +241,9 @@ async def get_po(po_id: str, current_user: User = Depends(get_current_user), db:
         "is_archived": po.is_archived,
         "document_url": po.document_url,
         "notes": po.notes,
+        "supplier_address": po.supplier_address,
+        "delivery_address": po.delivery_address,
+        "invoice_address": po.invoice_address,
         "created_at": po.created_at.isoformat() if po.created_at else None,
         "updated_at": po.updated_at.isoformat() if po.updated_at else None
     })
@@ -262,9 +274,15 @@ async def update_po(po_id: str, req: dict, current_user: User = Depends(get_curr
     if "status" in req:
         po.status = req["status"]
     if "notes" in req:
-        po.notes = req["notes"]
+        po.notes = req.get("notes")
     if "document_url" in req:
         po.document_url = req["document_url"]
+    if "supplier_address" in req:
+        po.supplier_address = req["supplier_address"]
+    if "delivery_address" in req:
+        po.delivery_address = req["delivery_address"]
+    if "invoice_address" in req:
+        po.invoice_address = req["invoice_address"]
     
     po.updated_at = datetime.now(timezone.utc)
     await db.commit()

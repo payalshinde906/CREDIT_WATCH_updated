@@ -171,6 +171,9 @@ class PurchaseOrder(Base):
     is_archived = Column(Boolean, default=False, index=True)
     document_url = Column(String(500), nullable=True)  # Google Drive URL
     notes = Column(Text, nullable=True)
+    supplier_address = Column(Text, nullable=True)
+    delivery_address = Column(Text, nullable=True)
+    invoice_address = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

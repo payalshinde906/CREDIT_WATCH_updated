@@ -59,10 +59,10 @@ class AuthService:
 
         try:
             password_hash: str = hash_password(request.password)
-        except PasswordValueError:
+        except PasswordValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Password contains invalid characters",
+                detail=str(e),
             )
 
         user = User(
@@ -102,18 +102,46 @@ class AuthService:
 
         stmt = select(User).where(
             User.gstin == request.gstin.upper(),
-            User.is_active == True,
+            User.is_active,
         )
         result = await db.execute(stmt)
         user: Optional[User] = result.scalars().first()
 
-        if not user or not verify_password(request.password, user.password_hash):#type:ignore
+        if not user or not verify_password(request.password, user.password_hash):  # type: ignore
             raise InvalidCredentials("Invalid GSTIN or password")
 
         logger.info(f"User logged in: {user.id}")
 
         tokens = AuthService._generate_tokens(user)
 
+        return {
+            "user": {
+                "id": user.id,
+                "gstin": user.gstin,
+                "email": user.email,
+                "company_name": user.company_name,
+            },
+            "tokens": tokens,
+        }
+
+    @staticmethod
+    async def login_with_email_otp(email: str, gstin: str, otp_code: str, db: AsyncSession) -> dict:
+        if not is_valid_gstin(gstin):
+            raise InvalidGSTIN()
+        try:
+            await OTPService.verify_otp_for_login_email(email, otp_code)
+        except (InvalidOTP, OTPExpired):
+            raise InvalidCredentials("Invalid or expired OTP")
+        stmt = select(User).where(
+            User.email == email.lower(),
+            User.gstin == gstin.upper(),
+            User.is_active,
+        )
+        result = await db.execute(stmt)
+        user: Optional[User] = result.scalars().first()
+        if not user:
+            raise UserNotFound()
+        tokens = AuthService._generate_tokens(user)
         return {
             "user": {
                 "id": user.id,
@@ -175,12 +203,12 @@ class AuthService:
         # Verify OTP before proceeding
         try:
             await OTPService.verify_otp_for_password_reset(email, otp_code)
-        except (InvalidOTP, OTPExpired) as e:
+        except (InvalidOTP, OTPExpired):
             raise InvalidCredentials("Invalid or expired OTP")
 
         stmt = select(User).where(
             User.email == email.lower(),
-            User.is_active == True,
+            User.is_active,
         )
         result = await db.execute(stmt)
         user: Optional[User] = result.scalars().first()
@@ -189,7 +217,7 @@ class AuthService:
             raise UserNotFound()
 
         try:
-            user.password_hash = hash_password(new_password) #type:ignore
+            user.password_hash = hash_password(new_password)  # type: ignore
         except PasswordValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

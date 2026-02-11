@@ -36,6 +36,14 @@ export async function login(credentials) {
   })
 }
 
+export async function sendEmailLoginOtp(email) {
+  return auth.sendEmailLoginOtp({ email })
+}
+
+export async function verifyEmailLoginOtp(email, gstin, otp_code) {
+  return auth.verifyEmailLoginOtp({ email, gstin, otp_code })
+}
+
 /**
  * Logout current user (clears server-side cookies)
  * @returns {Promise<{ok: boolean}>}
@@ -209,4 +217,6 @@ export default {
   sendPasswordResetOtp,
   verifyPasswordResetOtp,
   resetPassword,
+  sendEmailLoginOtp,
+  verifyEmailLoginOtp,
 }

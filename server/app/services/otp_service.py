@@ -4,8 +4,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, Tuple, Optional
 
 from app.redis_client import redis_client
-from app.exceptions import InvalidOTP, OTPExpired
+from app.exceptions import InvalidOTP
 from app.config import settings
+from app.services.email_service import EmailService
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,7 @@ class OTPService:
     REGISTRATION_PREFIX = "otp:registration:"
     PW_RESET_PREFIX = "otp:pwreset:"
     EMAIL_CHANGE_PREFIX = "otp:emailchange:"
+    LOGIN_EMAIL_PREFIX = "otp:loginemail:"
 
     @staticmethod
     def _generate_otp() -> str:
@@ -95,16 +97,19 @@ class OTPService:
         key = f"{cls.REGISTRATION_PREFIX}{identifier}"
         await _store_otp(key, otp, expiry_seconds)
 
-        logger.info(f"OTP generated for {identifier} (purpose: {purpose}): {otp}")
-
-        # For local development, skip real email sending and log OTP instead.
-        sent = True
-        logger.info("[DEV] OTP for %s (purpose=%s): %s", identifier, purpose, otp)
-
-        return {
-            "sent": sent,
-            "otp_code": otp
-        }
+        logger.info(f"OTP generated for {identifier} (purpose: {purpose})")
+        # Send OTP via email if address provided
+        if email:
+            try:
+                subject = "Your OTP Code"
+                body = (
+                    f"Your OTP code is: {otp}\n\n"
+                    f"This code will expire in {settings.OTP_EXPIRY_MINUTES} minutes."
+                )
+                EmailService().send_email(email, subject, body)
+            except Exception as e:
+                logger.warning("Failed to send OTP email to %s: %s", email, e)
+        return {"sent": True}
 
     @classmethod
     async def verify_otp(cls, identifier: str, otp: str, purpose: str = "registration") -> True:
@@ -142,16 +147,17 @@ class OTPService:
 
         await _store_otp(key, otp, expiry_seconds)
 
-        logger.info(f"Password reset OTP generated for {email}: {otp}")
-
-        # For local development, skip real email sending
-        sent = True
-        logger.info("[DEV] Password reset OTP for %s: %s", email, otp)
-
-        return {
-            "sent": sent,
-            "otp_code": otp
-        }
+        logger.info(f"Password reset OTP generated for {email}")
+        try:
+            subject = "Password Reset OTP"
+            body = (
+                f"Your password reset OTP is: {otp}\n\n"
+                f"This code will expire in {settings.OTP_EXPIRY_MINUTES} minutes."
+            )
+            EmailService().send_email(email, subject, body)
+        except Exception as e:
+            logger.warning("Failed to send password reset OTP to %s: %s", email, e)
+        return {"sent": True}
 
     @classmethod
     async def verify_otp_for_password_reset(cls, email: str, otp: str) -> True:
@@ -170,19 +176,55 @@ class OTPService:
         """Sends OTP to both new and old email for an email change request."""
         otp = cls._generate_otp()
         expiry_seconds = settings.OTP_EXPIRY_MINUTES * 60
-        key = f"{cls.EMAIL_CHANGE_PREFIX}{new_email}" # Keyed by the new email
+        key = f"{cls.EMAIL_CHANGE_PREFIX}{new_email}"
 
         await _store_otp(key, otp, expiry_seconds)
-        logger.info(f"Email change OTP generated for {new_email}: {otp}")
-
-        # For local development, skip real email sending
-        logger.info("[DEV] Email change OTP for %s (old email=%s): %s", new_email, old_email, otp)
-        return {"sent": True, "otp_code": otp}
+        logger.info(f"Email change OTP generated for {new_email}")
+        try:
+            subject = "Email Change OTP"
+            body = (
+                f"Your email change OTP is: {otp}\n\n"
+                f"This code will expire in {settings.OTP_EXPIRY_MINUTES} minutes."
+            )
+            svc = EmailService()
+            svc.send_email(new_email, subject, body)
+            if old_email:
+                svc.send_email(old_email, "Email Change Attempt", f"An email change was requested to {new_email}. If this wasn't you, please secure your account.")
+        except Exception as e:
+            logger.warning("Failed to send email change OTP: %s", e)
+        return {"sent": True}
 
     @classmethod
     async def verify_otp_for_email_change(cls, new_email: str, otp: str) -> True:
         """Verifies OTP for an email change request."""
         key = f"{cls.EMAIL_CHANGE_PREFIX}{new_email}"
+        stored_otp = await _get_otp(key)
+        if not stored_otp or stored_otp != otp:
+            raise InvalidOTP()
+        await _delete_otp(key)
+        return True
+
+    @classmethod
+    async def send_otp_for_login_email(cls, email: str) -> dict:
+        otp = cls._generate_otp()
+        expiry_seconds = settings.OTP_EXPIRY_MINUTES * 60
+        key = f"{cls.LOGIN_EMAIL_PREFIX}{email.lower()}"
+        await _store_otp(key, otp, expiry_seconds)
+        logger.info(f"Login email OTP generated for {email}")
+        try:
+            subject = "Login OTP"
+            body = (
+                f"Your login OTP is: {otp}\n\n"
+                f"This code will expire in {settings.OTP_EXPIRY_MINUTES} minutes."
+            )
+            EmailService().send_email(email, subject, body)
+        except Exception as e:
+            logger.warning("Failed to send login email OTP to %s: %s", email, e)
+        return {"sent": True}
+
+    @classmethod
+    async def verify_otp_for_login_email(cls, email: str, otp: str) -> True:
+        key = f"{cls.LOGIN_EMAIL_PREFIX}{email.lower()}"
         stored_otp = await _get_otp(key)
         if not stored_otp or stored_otp != otp:
             raise InvalidOTP()

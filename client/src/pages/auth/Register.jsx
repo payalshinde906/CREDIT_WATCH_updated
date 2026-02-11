@@ -47,34 +47,25 @@ export default function Register() {
 
     setSendingOtp(true)
     try {
-      const response = await fetch('http://localhost:8000/api/v1/auth/register/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          email: form.email.trim().toLowerCase(),
-          phone: phoneE164,
-        }),
-      })
-      
-      const data = await response.json()
-      
-      if (response.ok && data.success) {
+      const response = await import('../../services/api/apiClient').then(m => m.api.post('/auth/register/send-otp', {
+        email: form.email.trim().toLowerCase(),
+        phone: phoneE164,
+      }))
+      if (response.ok) {
         setOtpSent(true)
-        setStatus({ 
-          type: 'success', 
-          message: data.message || 'OTP sent to your email and phone. Check your inbox/SMS.' 
+        setStatus({
+          type: 'success',
+          message: response.data?.message || 'OTP sent to your email and phone. Check your inbox/SMS.'
         })
-        // In dev mode, show OTP in console
-        if (data.data?.otp_code) {
-          console.log('OTP Code (dev):', data.data.otp_code)
-          setStatus({ 
-            type: 'success', 
-            message: `OTP sent! Check console for OTP code: ${data.data.otp_code}` 
+        if (response.data?.otp_code) {
+          console.log('OTP Code (dev):', response.data.otp_code)
+          setStatus({
+            type: 'success',
+            message: `OTP sent! Check console for OTP code: ${response.data.otp_code}`
           })
         }
       } else {
-        setStatus({ type: 'error', message: data.error?.message || data.message || 'Failed to send OTP' })
+        setStatus({ type: 'error', message: response.error || 'Failed to send OTP' })
       }
     } catch (error) {
       setStatus({ type: 'error', message: 'Network error: ' + error.message })
@@ -107,6 +98,12 @@ export default function Register() {
     // Password validation - maximum 64 characters
     if (form.password.trim().length > 64) {
       setStatus({ type: 'error', message: 'Password must be less than 64 characters' })
+      return
+    }
+
+    const byteLen = new TextEncoder().encode(form.password.trim()).length
+    if (byteLen > 72) {
+      setStatus({ type: 'error', message: 'Password is too long (max 72 bytes). Avoid emojis or special symbols.' })
       return
     }
 

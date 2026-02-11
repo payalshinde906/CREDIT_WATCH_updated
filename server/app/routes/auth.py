@@ -2,7 +2,7 @@
 Authentication routes
 """
 from typing import Optional
-from fastapi import APIRouter, Depends, Response, Request, HTTPException, status
+from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
@@ -15,11 +15,12 @@ from app.schemas import (
     RefreshTokenRequest,
     SendOTPRequest,
     VerifyOTPRequest,
+    EmailLoginSendOTPRequest,
+    EmailLoginVerifyOTPRequest,
 )
 from app.services import AuthService, EmailService, OTPService
 from app.utils import ResponseFormatter, format_phone_e164
 from app.config import settings
-from app.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ async def register_send_otp(request: RegisterSendOTPRequest, http_request: Reque
     )
 
     return ResponseFormatter.create_success(
-        data={"sent": result["sent"], "otp_code": result.get("otp_code")},
+        data={"sent": result["sent"]},
         message="OTP sent successfully",
         request_id=http_request.state.request_id,
     )
@@ -73,8 +74,8 @@ async def register(
         key="access_token",
         value=result["tokens"]["access_token"],
         httponly=True,
-        secure=False,        # localhost
-        samesite="lax",
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
     )
@@ -83,8 +84,8 @@ async def register(
         key="refresh_token",
         value=result["tokens"]["refresh_token"],
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         path="/",
     )
@@ -113,8 +114,8 @@ async def login(
         key="access_token",
         value=result["tokens"]["access_token"],
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
     )
@@ -123,12 +124,61 @@ async def login(
         key="refresh_token",
         value=result["tokens"]["refresh_token"],
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         path="/",
     )
 
+    return response
+
+# ---------------- EMAIL OTP LOGIN ----------------
+
+
+@router.post("/login/send-email-otp")
+async def login_send_email_otp(
+    request: EmailLoginSendOTPRequest,
+    http_request: Request,
+):
+    result = await OTPService.send_otp_for_login_email(request.email)
+    return ResponseFormatter.create_success(
+        data={"sent": result["sent"]},
+        message="OTP sent to email",
+        request_id=http_request.state.request_id,
+    )
+
+
+@router.post("/login/verify-email-otp")
+async def login_verify_email_otp(
+    request: EmailLoginVerifyOTPRequest,
+    db: AsyncSession = Depends(get_db),
+    http_request: Request = None,
+):
+    result = await AuthService.login_with_email_otp(request.email, request.gstin, request.otp_code, db)
+    response_data = ResponseFormatter.create_success(
+        data=result["user"],
+        message="Login successful",
+        request_id=http_request.state.request_id,
+    )
+    response = JSONResponse(content=response_data)
+    response.set_cookie(
+        key="access_token",
+        value=result["tokens"]["access_token"],
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=result["tokens"]["refresh_token"],
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        path="/",
+    )
     return response
 
 
@@ -163,8 +213,8 @@ async def refresh_token(
         key="access_token",
         value=result["access_token"],
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
     )

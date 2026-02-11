@@ -1,7 +1,7 @@
 """
 Pydantic schemas init
 """
-from app.schemas.auth import RegisterRequest, RegisterSendOTPRequest, LoginRequest, TokenResponse, RefreshTokenRequest, ChangePhoneRequest, SendOTPRequest, VerifyOTPRequest
+from app.schemas.auth import RegisterRequest, RegisterSendOTPRequest, LoginRequest, TokenResponse, RefreshTokenRequest, ChangePhoneRequest, SendOTPRequest, VerifyOTPRequest, EmailLoginSendOTPRequest, EmailLoginVerifyOTPRequest
 from app.schemas.user import UserProfileResponse, UpdateProfileRequest
 from app.schemas.subscription import SubscriptionRequest, SubscriptionResponse, SubscriptionStatusResponse, PlanResponse
 from app.schemas.payment import PaymentInitiateRequest, PaymentInitiateResponse, PaymentVerifyRequest, PaymentResponse, PaymentStatusResponse, PaymentHistoryResponse
@@ -23,6 +23,8 @@ __all__ = [
     "ChangePhoneRequest",
     "SendOTPRequest",
     "VerifyOTPRequest",
+    "EmailLoginSendOTPRequest",
+    "EmailLoginVerifyOTPRequest",
     "UserProfileResponse",
     "UpdateProfileRequest",
     "SubscriptionRequest",

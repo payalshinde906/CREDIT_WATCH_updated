@@ -9,9 +9,27 @@ import logging
 
 from app.config import settings
 from app.database import engine, Base
-from app.middleware import ErrorHandlerMiddleware, RequestIDMiddleware, RateLimitMiddleware
-from app.routes import auth, drive, core, admin, subscriptions, business_profile, invoices, appointments, contact, wallet
-from app.routes import cms, payments, user_settings
+from sqlalchemy import text
+from app.middleware import (
+    ErrorHandlerMiddleware,
+    RequestIDMiddleware,
+    RateLimitMiddleware,
+)
+from app.routes import (
+    auth,
+    drive,
+    core,
+    admin,
+    subscriptions,
+    business_profile,
+    invoices,
+    appointments,
+    contact,
+    wallet,
+    cms,
+    payments,
+    user_settings,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -30,13 +48,28 @@ async def lifespan(app: FastAPI):
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            try:
+                # Migration: ensure PO address columns exist
+                dburl = str(engine.url)
+                is_sqlite = dburl.startswith("sqlite")
+                if is_sqlite:
+                    await conn.execute(text("ALTER TABLE purchase_orders ADD COLUMN supplier_address TEXT"))
+                    await conn.execute(text("ALTER TABLE purchase_orders ADD COLUMN delivery_address TEXT"))
+                    await conn.execute(text("ALTER TABLE purchase_orders ADD COLUMN invoice_address TEXT"))
+                else:
+                    await conn.execute(text("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS supplier_address TEXT"))
+                    await conn.execute(text("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS delivery_address TEXT"))
+                    await conn.execute(text("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS invoice_address TEXT"))
+                logger.info("PO address columns migrated/verified")
+            except Exception as e:
+                logger.info(f"PO address migration step skipped or already applied: {e}")
         logger.info("Database tables created/verified")
     except Exception as e:
         logger.warning(f"Database connection failed during startup: {e}")
         logger.info("Continuing without database initialization...")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down...")
     try:
@@ -55,7 +88,13 @@ app = FastAPI(
 )
 
 # Ensure dev origins are always allowed (e.g. if .env only has 3000, frontend on 3001 would be blocked)
-_dev_origins = ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173", "http://localhost:3002"]
+_dev_origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:5173",
+    "http://localhost:3002",
+   
+]
 _cors_origins = list(settings.CORS_ORIGINS) if settings.CORS_ORIGINS else []
 for origin in _dev_origins:
     if origin not in _cors_origins:
@@ -101,8 +140,13 @@ app.include_router(user_settings.router, prefix=f"{API_PREFIX}/user/settings", t
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
-    return {"status": "ok", "service": "creditdatawatch-api", "version": "1.0.0"}
+    db_status = "ok"
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+    except Exception as e:
+        db_status = f"unavailable: {str(e)}"
+    return {"status": "ok", "service": "creditdatawatch-api", "version": "1.0.0", "db": db_status}
 
 
 @app.get("/")
@@ -114,4 +158,3 @@ async def root():
         "docs": "/docs",
         "health": "/health"
     }
-

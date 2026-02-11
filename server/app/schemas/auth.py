@@ -62,3 +62,13 @@ class VerifyOTPRequest(BaseModel):
 
     phone: str
     otp_code: str = Field(..., min_length=4, max_length=10)
+
+
+class EmailLoginSendOTPRequest(BaseModel):
+    email: EmailStr
+
+
+class EmailLoginVerifyOTPRequest(BaseModel):
+    email: EmailStr
+    gstin: str
+    otp_code: str = Field(..., min_length=4, max_length=10)

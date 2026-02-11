@@ -27,7 +27,8 @@ export default function CSVImportModal({ onClose, onImportComplete }) {
       throw new Error('CSV file must have a header row and at least one data row')
     }
 
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
+    const normalize = (h) => h.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_')
+    const headers = lines[0].split(',').map(normalize)
     const requiredHeaders = ['number', 'vendor_name', 'vendor_gstin', 'amount', 'due_date']
     
     for (const required of requiredHeaders) {
@@ -60,7 +61,7 @@ export default function CSVImportModal({ onClose, onImportComplete }) {
         throw new Error(`Row ${i}: Invalid amount`)
       }
 
-      rows.push({
+      const payload = {
         number: row.number,
         vendor_name: row.vendor_name,
         vendor_gstin: row.vendor_gstin.toUpperCase(),
@@ -69,7 +70,17 @@ export default function CSVImportModal({ onClose, onImportComplete }) {
         status: row.status || 'open',
         notes: row.notes || '',
         document_url: row.document_url || '',
-      })
+      }
+      const extras = {
+        order_currency: row.order_currency || row.purchase_currency || 'INR',
+        supplier_address: row.supplier_address || '',
+        item_summary: row.item_summary || '',
+        delivery_address: row.delivery_address || '',
+        invoice_address: row.invoice_address || '',
+        order_date: row.order_date || '',
+      }
+      Object.assign(payload, extras)
+      rows.push(payload)
     }
 
     return rows

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../state/authContext'
-import { api } from '../../services/api/apiClient'
+import { api, purchaseOrders } from '../../services/api/apiClient'
 import authService from '../../services/authService'
 import { formatE164 } from '../../utils/phone'
+import EditPOModal from '../../components/po/EditPOModal'
 
 export default function Account() {
   const { user, logout, loadUser } = useAuth()
@@ -36,6 +37,18 @@ export default function Account() {
   // Time display
   const [currentTime, setCurrentTime] = useState({ gmt: '', ist: '' })
   const [loginTime, setLoginTime] = useState('')
+  const [showPOHistory, setShowPOHistory] = useState(false)
+  const [poRows, setPoRows] = useState([])
+  const [poLoading, setPoLoading] = useState(false)
+  const [poStatus, setPoStatus] = useState('')
+  const [editingPO, setEditingPO] = useState(null)
+  useEffect(() => {
+    const handler = () => {
+      if (showPOHistory) loadPOs()
+    }
+    window.addEventListener('poChanged', handler)
+    return () => window.removeEventListener('poChanged', handler)
+  }, [showPOHistory])
 
   useEffect(() => {
     if (user) {
@@ -299,6 +312,63 @@ export default function Account() {
     }
   }
 
+  const loadPOs = async () => {
+    setPoLoading(true)
+    setPoStatus('')
+    const res = await purchaseOrders.list(1, 100, true)
+    if (res.ok && Array.isArray(res.data?.items)) {
+      setPoRows(res.data.items)
+    } else if (res.ok && Array.isArray(res.data)) {
+      setPoRows(res.data)
+    } else {
+      setPoStatus(res.error || 'Failed to load purchase orders')
+    }
+    setPoLoading(false)
+  }
+
+  const handleAddNewPOSection = async () => {
+    setShowPOHistory(true)
+    await loadPOs()
+  }
+
+  const handleClearPOSection = () => {
+    setShowPOHistory(false)
+    setPoRows([])
+    setPoStatus('')
+  }
+
+  const handleArchivePO = async (po) => {
+    const res = await purchaseOrders.archive(po.id)
+    if (res.ok) {
+      setPoRows((prev) => prev.map(r => r.id === po.id ? { ...r, is_archived: !r.is_archived } : r))
+      setPoStatus(po.is_archived ? 'PO restored.' : 'PO archived.')
+    } else {
+      setPoStatus(res.error || 'Failed to archive PO')
+    }
+  }
+
+  const handleDeletePO = async (po) => {
+    const res = await purchaseOrders.delete(po.id)
+    if (res.ok) {
+      setPoRows((prev) => prev.filter(r => r.id !== po.id))
+      setPoStatus('PO deleted.')
+    } else {
+      setPoStatus(res.error || 'Failed to delete PO')
+    }
+  }
+
+  const handleSaveEditPO = async (payload) => {
+    if (!editingPO) return false
+    const res = await purchaseOrders.update(editingPO.id, payload)
+    if (res.ok) {
+      setPoRows((prev) => prev.map(r => r.id === editingPO.id ? { ...r, ...payload } : r))
+      setPoStatus('PO updated.')
+      return true
+    }
+    setPoStatus(res.error || 'Failed to update PO')
+    return false
+  }
+
   const formatDateTime = (dateString) => {
     if (!dateString) return '—'
     const date = new Date(dateString)
@@ -426,6 +496,116 @@ export default function Account() {
             </div>
           </div>
         </div>
+
+        {/* PO Controls */}
+        <div className="card">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-heading font-semibold text-gray-900">Purchase Orders</h2>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleAddNewPOSection}
+                className="px-5 py-2 rounded-lg border-2 border-yellow-500 bg-yellow-300 text-gray-900 font-semibold hover:bg-yellow-400 transition-colors"
+              >
+                Add New PO
+              </button>
+              <button
+                type="button"
+                onClick={handleClearPOSection}
+                className="btn-secondary"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+          {poStatus && <p className="mt-3 text-sm text-gray-700">{poStatus}</p>}
+        </div>
+
+        {/* PO History Table */}
+        {showPOHistory && (
+          <div className="card">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-heading font-semibold text-gray-900">History</h3>
+              {poLoading && <span className="text-sm text-gray-500">Loading...</span>}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-600">
+                    <th className="py-2 pr-3">Purchase_Order_No</th>
+                    <th className="py-2 pr-3">Order_Date</th>
+                    <th className="py-2 pr-3">Order_Currency</th>
+                    <th className="py-2 pr-3">Purchase_Payment</th>
+                    <th className="py-2 pr-3">Supplier_Name</th>
+                    <th className="py-2 pr-3">Supplier_Address</th>
+                    <th className="py-2 pr-3">Item_Summary</th>
+                    <th className="py-2 pr-3">Delivery_Address</th>
+                    <th className="py-2 pr-3">Invoice_Address</th>
+                    <th className="py-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {!poLoading && poRows.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="py-3 text-center text-gray-500">No purchase orders yet.</td>
+                    </tr>
+                  )}
+                  {poRows.map((row) => (
+                    <tr key={row.id} className={`text-gray-800 ${row.is_archived ? 'opacity-50' : ''}`}>
+                      <td className="py-2 pr-3 font-semibold">{row.number || '—'}</td>
+                      <td className="py-2 pr-3">{(row.created_at || row.due_date) ? (row.created_at ? row.created_at.slice(0,10) : row.due_date.slice(0,10)) : '—'}</td>
+                      <td className="py-2 pr-3">{row.order_currency || 'INR'}</td>
+                      <td className="py-2 pr-3">{(row.purchase_payment != null ? Number(row.purchase_payment) : Number(row.amount || 0)).toLocaleString('en-IN')}</td>
+                      <td className="py-2 pr-3">{row.vendor_name || '—'}</td>
+                      <td className="py-2 pr-3">{row.supplier_address || '—'}</td>
+                      <td className="py-2 pr-3">{row.item_summary || '—'}</td>
+                      <td className="py-2 pr-3">{row.delivery_address || '—'}</td>
+                      <td className="py-2 pr-3">{row.invoice_address || '—'}</td>
+                      <td className="py-2">
+                        <div className="flex gap-2">
+                          {!row.is_archived && (
+                            <button
+                              type="button"
+                              onClick={() => setEditingPO(row)}
+                              className="text-blue-600 hover:text-blue-800 text-xs font-medium"
+                              title="Edit"
+                            >
+                              ✏️
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleArchivePO(row)}
+                            className="text-amber-600 hover:text-amber-800 text-xs font-medium"
+                            title={row.is_archived ? 'Restore' : 'Archive'}
+                          >
+                            {row.is_archived ? 'Restore' : 'Archive'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePO(row)}
+                            className="text-red-600 hover:text-red-800 text-xs font-medium"
+                            title="Delete"
+                          >
+                            🗑
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {editingPO && (
+          <EditPOModal
+            po={editingPO}
+            onClose={() => setEditingPO(null)}
+            onSave={handleSaveEditPO}
+          />
+        )}
 
         {/* Edit Name */}
         <div className="card">
