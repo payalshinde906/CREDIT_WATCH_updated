@@ -1,15 +1,12 @@
 """
-Password utilities using bcrypt (FINAL, SAFE)
+Password utilities using passlib with bcrypt_sha256 for long password support
 """
 
 import unicodedata
 from passlib.context import CryptContext
 from passlib.exc import PasswordValueError
 
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto",
-)
+pwd_context = CryptContext(schemes=["bcrypt_sha256", "bcrypt"], deprecated="auto")
 
 
 def normalize_password(password: str) -> str:
@@ -40,16 +37,16 @@ def normalize_password(password: str) -> str:
     if "\x00" in password:
         raise PasswordValueError("Password contains invalid characters")
 
-    # Check password length (bcrypt has 72 byte limit)
-    if len(password.encode('utf-8')) > 72:
-        raise PasswordValueError("Password is too long (max 72 bytes)")
+    # Protect against extremely large inputs
+    if len(password) > 4096:
+        raise PasswordValueError("Password is too long")
 
     return password
 
 
 def hash_password(password: str) -> str:
     """
-    Hash password using bcrypt
+    Hash password using bcrypt_sha256 (fallback verify for bcrypt)
     """
     try:
         password = normalize_password(password)

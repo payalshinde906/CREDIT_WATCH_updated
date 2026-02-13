@@ -95,15 +95,9 @@ export default function Register() {
       return
     }
 
-    // Password validation - maximum 64 characters
-    if (form.password.trim().length > 64) {
-      setStatus({ type: 'error', message: 'Password must be less than 64 characters' })
-      return
-    }
-
-    const byteLen = new TextEncoder().encode(form.password.trim()).length
-    if (byteLen > 72) {
-      setStatus({ type: 'error', message: 'Password is too long (max 72 bytes). Avoid emojis or special symbols.' })
+    // Password validation - maximum length safeguard
+    if (form.password.trim().length > 256) {
+      setStatus({ type: 'error', message: 'Password must be less than 256 characters' })
       return
     }
 
