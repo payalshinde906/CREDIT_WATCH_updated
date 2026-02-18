@@ -6,7 +6,10 @@ import unicodedata
 from passlib.context import CryptContext
 from passlib.exc import PasswordValueError
 
-pwd_context = CryptContext(schemes=["bcrypt_sha256", "bcrypt"], deprecated="auto")
+pwd_context = CryptContext(
+    schemes=["bcrypt_sha256", "bcrypt"],
+    deprecated=["bcrypt"]
+)
 
 
 def normalize_password(password: str) -> str:
@@ -50,7 +53,8 @@ def hash_password(password: str) -> str:
     """
     try:
         password = normalize_password(password)
-        return pwd_context.hash(password)
+        # Force bcrypt_sha256 to avoid 72-byte bcrypt limit on long/multibyte passwords
+        return pwd_context.hash(password, scheme="bcrypt_sha256")
     except PasswordValueError:
         # Re-raise with same message
         raise

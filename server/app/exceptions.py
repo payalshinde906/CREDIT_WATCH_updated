@@ -74,6 +74,11 @@ class InvalidPassword(AppException):
         super().__init__("INVALID_PASSWORD", message, 400)
 
 
+class DuplicateGSTIN(AppException):
+    def __init__(self, message: str = "GSTIN already registered"):
+        super().__init__("GSTIN_ALREADY_REGISTERED", message, 400)
+
+
 class PlanNotFound(AppException):
     def __init__(self, message: str = "Plan not found or inactive"):
         super().__init__("PLAN_NOT_FOUND", message, 404)

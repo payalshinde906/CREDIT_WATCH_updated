@@ -29,10 +29,12 @@ from app.exceptions import (
     UserNotFound,
     InvalidOTP,
     OTPExpired,
+    DuplicateGSTIN,
 )
 from app.config import settings
 
 import logging
+from sqlalchemy.exc import IntegrityError
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +57,7 @@ class AuthService:
         result = await db.execute(stmt)
         existing_user: Optional[User] = result.scalars().first()
         if existing_user:
-            raise InvalidCredentials("GSTIN already registered")
+            raise DuplicateGSTIN()
 
         try:
             password_hash: str = hash_password(request.password)
@@ -76,7 +78,14 @@ class AuthService:
         )
 
         db.add(user)
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError as e:
+            await db.rollback()
+            msg = str(e.orig).lower() if getattr(e, "orig", None) else str(e).lower()
+            if "gstin" in msg and "unique" in msg:
+                raise DuplicateGSTIN()
+            raise
         await db.refresh(user)
 
         logger.info(f"User registered: {user.id} ({user.gstin})")
