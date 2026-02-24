@@ -42,7 +42,7 @@ class BusinessProfileService:
         if not user:
             raise UserNotFound()
         
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         new_profile = BusinessProfile(
             id=str(uuid4()),
             user_id=user_id,
@@ -95,7 +95,7 @@ class BusinessProfileService:
             if field in allowed_fields and value is not None:
                 setattr(profile, field, value)
         
-        profile.updated_at = datetime.now(timezone.utc)
+        profile.updated_at = datetime.utcnow()
         
         logger.info(f"Updated business profile for user {user_id}: {list(updates.keys())}")
         return profile

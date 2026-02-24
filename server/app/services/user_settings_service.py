@@ -64,7 +64,7 @@ class UserSettingsService:
         if not user:
             raise UserNotFound()
         
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         settings = UserSettings(
             id=str(uuid4()),
             user_id=user_id,
@@ -116,7 +116,7 @@ class UserSettingsService:
         if notifications_enabled is not None:
             settings.notifications_enabled = notifications_enabled
         
-        settings.updated_at = datetime.now(timezone.utc)
+        settings.updated_at = datetime.utcnow()
         
         await db.flush()
         

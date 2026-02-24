@@ -207,7 +207,7 @@ async def verify_defaulter_case(
     
     case.approval_status = "approved" if action == "approve" else "rejected"
     case.verified_by = admin.id
-    case.verification_date = datetime.now(timezone.utc)
+    case.verification_date = datetime.utcnow()
     case.notes = notes
     
     if action == "approve":

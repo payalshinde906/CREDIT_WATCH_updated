@@ -4,6 +4,8 @@ import NotificationsPanel from '../components/dashboard/NotificationsPanel'
 import { useAuth } from '../state/authContext'
 import { purchaseOrders, invoices, defaulters, creditReports, settlements, appointments, wallet } from '../services/api/apiClient'
 import { Link } from 'react-router-dom'
+import EditPOModal from '../components/po/EditPOModal'
+import PurchaseOrders from './PurchaseOrders'
 
 export default function Dashboard() {
   const { user, subscription, loading } = useAuth()
@@ -19,10 +21,14 @@ export default function Dashboard() {
   const [recentActivity, setRecentActivity] = useState([])
   const [dueReminders, setDueReminders] = useState([])
   const [loadingData, setLoadingData] = useState(true)
+  const [purchaseRows, setPurchaseRows] = useState([])
+  const [purchaseLoading, setPurchaseLoading] = useState(false)
+  const [editingPO, setEditingPO] = useState(null)
 
   useEffect(() => {
     if (user) {
       fetchDashboardData()
+      loadPurchaseHistory()
     }
   }, [user])
 
@@ -102,6 +108,43 @@ export default function Dashboard() {
       console.error('Error fetching dashboard data:', error)
     }
     setLoadingData(false)
+  }
+
+  const loadPurchaseHistory = async () => {
+    setPurchaseLoading(true)
+    const res = await purchaseOrders.list(1, 100, true)
+    if (res.ok && Array.isArray(res.data?.items)) {
+      setPurchaseRows(res.data.items)
+    } else if (res.ok && Array.isArray(res.data)) {
+      setPurchaseRows(res.data)
+    } else {
+      setPurchaseRows([])
+    }
+    setPurchaseLoading(false)
+  }
+
+  const handleArchivePO = async (po) => {
+    const res = await purchaseOrders.archive(po.id)
+    if (res.ok) {
+      setPurchaseRows((prev) => prev.map(r => r.id === po.id ? { ...r, is_archived: !r.is_archived } : r))
+    }
+  }
+
+  const handleDeletePO = async (po) => {
+    const res = await purchaseOrders.delete(po.id)
+    if (res.ok) {
+      setPurchaseRows((prev) => prev.filter(r => r.id !== po.id))
+    }
+  }
+
+  const handleSaveEditPO = async (payload) => {
+    if (!editingPO) return false
+    const res = await purchaseOrders.update(editingPO.id, payload)
+    if (res.ok) {
+      setPurchaseRows((prev) => prev.map(r => r.id === editingPO.id ? { ...r, ...payload } : r))
+      return true
+    }
+    return false
   }
 
   const planLabel = useMemo(() => {
@@ -202,26 +245,28 @@ export default function Dashboard() {
               View all →
             </Link>
           </div>
-          <div className="card hover:shadow-md transition-shadow bg-gradient-to-br from-indigo-50 to-white">
-            <p className="text-sm text-gray-500 mb-1">My Wallet</p>
-            <p className="text-3xl font-heading font-bold text-indigo-700">{stats.wallet} <span className="text-sm text-gray-500 font-normal">pts</span></p>
-            <Link to="/wallet" className="text-xs text-indigo-700 hover:underline mt-2 inline-block">
-              Redeem →
-            </Link>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="card space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-heading font-semibold text-gray-900">Quick Actions</h2>
+            <span className="text-sm text-gray-500">Jump to priority workflows</span>
           </div>
+          <QuickActions />
+        </div>
+
+        {/* My Wallet */}
+        <div className="card hover:shadow-md transition-shadow bg-gradient-to-br from-indigo-50 to-white">
+          <p className="text-sm text-gray-500 mb-1">My Wallet</p>
+          <p className="text-3xl font-heading font-bold text-indigo-700">{stats.wallet} <span className="text-sm text-gray-500 font-normal">pts</span></p>
+          <Link to="/wallet" className="text-xs text-indigo-700 hover:underline mt-2 inline-block">
+            Redeem →
+          </Link>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            {/* Quick Actions */}
-            <div className="card space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-heading font-semibold text-gray-900">Quick Actions</h2>
-                <span className="text-sm text-gray-500">Jump to priority workflows</span>
-              </div>
-              <QuickActions />
-            </div>
-
             {/* Recent Activity */}
             <div className="card">
               <h2 className="text-xl font-heading font-semibold text-gray-900 mb-4">Recent Activity</h2>
@@ -298,6 +343,15 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+
+        <PurchaseOrders />
+        {editingPO && (
+          <EditPOModal
+            po={editingPO}
+            onClose={() => setEditingPO(null)}
+            onSave={handleSaveEditPO}
+          />
+        )}
       </div>
     </section>
   )

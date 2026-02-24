@@ -122,6 +122,7 @@ API_PREFIX = "/api/v1"
 app.include_router(auth.router, prefix=f"{API_PREFIX}/auth", tags=["Authentication"])
 app.include_router(core.user_router, prefix=f"{API_PREFIX}/user", tags=["User"])
 app.include_router(core.po_router, prefix=f"{API_PREFIX}/purchase-orders", tags=["Purchase Orders"])
+app.include_router(core.purchase_history_router, prefix=API_PREFIX, tags=["Purchase History"])
 app.include_router(invoices.router, prefix=API_PREFIX, tags=["Invoices"])
 app.include_router(core.defaulter_router, prefix=f"{API_PREFIX}/defaulters", tags=["Defaulters"])
 app.include_router(core.credit_router, prefix=f"{API_PREFIX}/credit-reports", tags=["Credit Reports"])

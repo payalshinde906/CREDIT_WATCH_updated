@@ -15,6 +15,7 @@ from app.dependencies import get_current_user
 from app.exceptions import UnauthorizedFeature
 from app.utils.phone import is_valid_phone
 import uuid
+from sqlalchemy import or_
 
 # Feature name constants
 PO_MANAGEMENT = "PO_MANAGEMENT"
@@ -177,14 +178,31 @@ async def create_po(req: dict, current_user: User = Depends(get_current_user), d
     """Create purchase order"""
     if not await AccessControlService.can_access_feature(current_user.id, PO_MANAGEMENT, db):
         raise UnauthorizedFeature(PO_FEATURE_NAME)
+    due_val = req.get("due_date")
+    if isinstance(due_val, str):
+        try:
+            if len(due_val) == 10:
+                # Date only; keep naive UTC date (midnight) to match TIMESTAMP WITHOUT TIME ZONE
+                due_val = datetime.fromisoformat(due_val)
+            else:
+                # Normalize to UTC then drop tzinfo to keep naive
+                dv = datetime.fromisoformat(due_val.replace("Z", "+00:00"))
+                due_val = dv.astimezone(timezone.utc).replace(tzinfo=None)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid due_date format")
+    amt_val = req.get("amount")
+    try:
+        amt_val = float(amt_val)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid amount")
     po = PurchaseOrder(
         id=str(uuid.uuid4()),
         user_id=current_user.id,
         number=req["number"],
         vendor_name=req["vendor_name"],
         vendor_gstin=req["vendor_gstin"].upper(),
-        amount=req["amount"],
-        due_date=req["due_date"],
+        amount=amt_val,
+        due_date=due_val,
         status=req.get("status", "Open"),
         notes=req.get("notes"),
         document_url=req.get("document_url"),
@@ -221,6 +239,39 @@ async def list_pos(current_user: User = Depends(get_current_user), db: AsyncSess
         "invoice_address": p.invoice_address,
         "created_at": p.created_at.isoformat() if p.created_at else None,
     } for p in pos])
+
+# Purchase history routes
+purchase_history_router = APIRouter()
+
+@purchase_history_router.get("/purchase-history")
+async def purchase_history(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """List user's completed or archived purchase orders"""
+    stmt = (
+        select(PurchaseOrder)
+        .where(
+            (PurchaseOrder.user_id == current_user.id) &
+            (or_(PurchaseOrder.status == "Completed", PurchaseOrder.is_archived == True))
+        )
+        .order_by(PurchaseOrder.created_at.desc())
+    )
+    result = await db.execute(stmt)
+    rows = result.scalars().all()
+    return ResponseFormatter.create_success(data=[{
+        "id": p.id,
+        "number": p.number,
+        "vendor_name": p.vendor_name,
+        "vendor_gstin": p.vendor_gstin,
+        "amount": p.amount,
+        "due_date": p.due_date.isoformat() if p.due_date else None,
+        "status": p.status,
+        "is_archived": p.is_archived,
+        "document_url": p.document_url,
+        "notes": p.notes,
+        "supplier_address": p.supplier_address,
+        "delivery_address": p.delivery_address,
+        "invoice_address": p.invoice_address,
+        "created_at": p.created_at.isoformat() if p.created_at else None,
+    } for p in rows])
 
 @po_router.get("/{po_id}")
 async def get_po(po_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
@@ -268,9 +319,22 @@ async def update_po(po_id: str, req: dict, current_user: User = Depends(get_curr
     if "vendor_gstin" in req:
         po.vendor_gstin = req["vendor_gstin"].upper()
     if "amount" in req:
-        po.amount = req["amount"]
+        try:
+            po.amount = float(req["amount"])
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid amount")
     if "due_date" in req:
-        po.due_date = req["due_date"]
+        val = req["due_date"]
+        if isinstance(val, str):
+            try:
+                if len(val) == 10:
+                    val = datetime.fromisoformat(val)
+                else:
+                    dv = datetime.fromisoformat(val.replace("Z", "+00:00"))
+                    val = dv.astimezone(timezone.utc).replace(tzinfo=None)
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid due_date format")
+        po.due_date = val
     if "status" in req:
         po.status = req["status"]
     if "notes" in req:
@@ -284,7 +348,7 @@ async def update_po(po_id: str, req: dict, current_user: User = Depends(get_curr
     if "invoice_address" in req:
         po.invoice_address = req["invoice_address"]
     
-    po.updated_at = datetime.now(timezone.utc)
+    po.updated_at = datetime.utcnow()
     await db.commit()
     return ResponseFormatter.create_success(data={"id": po.id}, message="PO updated successfully")
 
@@ -314,7 +378,7 @@ async def archive_po(po_id: str, current_user: User = Depends(get_current_user),
         raise HTTPException(status_code=404, detail=PO_NOT_FOUND_ERROR)
     
     po.is_archived = not po.is_archived
-    po.updated_at = datetime.now(timezone.utc)
+    po.updated_at = datetime.utcnow()
     await db.commit()
     return ResponseFormatter.create_success(data={"is_archived": po.is_archived}, message="PO archive status updated")
 
@@ -470,7 +534,7 @@ async def update_defaulter(case_id: str, req: dict, current_user: User = Depends
         raise HTTPException(status_code=400, detail=INVALID_PAN_FORMAT)
     
     _apply_defaulter_updates(case, req)
-    case.updated_at = datetime.now(timezone.utc)
+    case.updated_at = datetime.utcnow()
     await db.commit()
     
     return ResponseFormatter.create_success(message="Defaulter case updated")
@@ -525,7 +589,7 @@ async def upload_defaulter_document(
     if "ca_certificate_url" in req:
         case.ca_certificate_url = req.get("ca_certificate_url", "")
     
-    case.updated_at = datetime.now(timezone.utc)
+    case.updated_at = datetime.utcnow()
     await db.commit()
     
     return ResponseFormatter.create_success(message="Document links updated")
@@ -614,7 +678,7 @@ async def update_credit_report(report_id: str, req: dict, current_user: User = D
     if "last_updated" in req:
         report.last_updated = datetime.fromisoformat(req["last_updated"])
     
-    report.updated_at = datetime.now(timezone.utc)
+    report.updated_at = datetime.utcnow()
     await db.commit()
     
     return ResponseFormatter.create_success(message="Credit report updated")
@@ -699,7 +763,7 @@ async def update_settlement(settlement_id: str, req: dict, current_user: User = 
     if "documents_drive_folder" in req:
         settlement.documents_drive_folder = req["documents_drive_folder"]
     
-    settlement.updated_at = datetime.now(timezone.utc)
+    settlement.updated_at = datetime.utcnow()
     await db.commit()
     
     return ResponseFormatter.create_success(message="Settlement updated")

@@ -16,6 +16,7 @@ from app.exceptions import UserNotFound
 from app.utils.response import ResponseFormatter
 from app.dependencies import get_current_user
 import logging
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -73,10 +74,12 @@ async def get_profile(
     except Exception as e:
         await db.rollback()
         logger.exception("Error getting profile")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get profile",
-        )
+        if isinstance(e, SQLAlchemyError):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Database error: {str(e)}",
+            )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to get profile")
 
 
 @router.put("/profile", response_model=dict)

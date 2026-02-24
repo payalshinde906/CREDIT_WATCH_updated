@@ -8,6 +8,12 @@ from app.exceptions import AppException
 from app.utils.response import ResponseFormatter
 import logging
 import socket
+from sqlalchemy.exc import SQLAlchemyError
+try:
+    import asyncpg
+    ASYNC_PG_ERROR = asyncpg.PostgresError
+except Exception:  # pragma: no cover
+    ASYNC_PG_ERROR = tuple()
 
 logger = logging.getLogger(__name__)
 
@@ -65,16 +71,15 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
                 )
         except Exception as exc:
             logger.error(f"[{request_id}] Unexpected error: {str(exc)}", exc_info=True)
-            # Check if it's a database-related error
-            error_str = str(exc)
-            if "database" in error_str.lower() or "connection" in error_str.lower() or "asyncpg" in error_str.lower():
+            # Treat only known DB exceptions as database outages
+            if isinstance(exc, SQLAlchemyError) or (ASYNC_PG_ERROR and isinstance(exc, ASYNC_PG_ERROR)):
                 return JSONResponse(
                     status_code=503,
                     content=ResponseFormatter.create_error(
                         "DATABASE_ERROR",
                         "Database service is unavailable. Please check your database configuration and ensure PostgreSQL is running.",
                         503,
-                        {},
+                        {"cause": str(exc)},
                         request_id,
                     ),
                 )

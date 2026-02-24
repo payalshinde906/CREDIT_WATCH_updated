@@ -83,10 +83,10 @@ class PaymentService:
         
         for payment in pending_payments:
             payment.status = PaymentStatus.CANCELLED
-            payment.updated_at = datetime.now(timezone.utc)
+            payment.updated_at = datetime.utcnow()
         
         # Create new payment record
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         reference_id = generate_reference_id()
         
         payment = Payment(
@@ -221,7 +221,7 @@ class PaymentService:
         # For simulation, we'll just mark as success
         
         # Update payment status
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         payment.status = PaymentStatus.SUCCESS
         payment.transaction_id = transaction_id
         payment.gateway_order_id = gateway_order_id
@@ -249,7 +249,7 @@ class PaymentService:
             # Rollback payment status or handle error appropriately
             payment.status = PaymentStatus.FAILED
             payment.failure_reason = f"Failed to activate subscription: {str(e)}"
-            payment.updated_at = datetime.now(timezone.utc)
+            payment.updated_at = datetime.utcnow()
             await db.flush()
             raise
         
@@ -337,7 +337,7 @@ class PaymentService:
             raise ValueError(f"Cannot cancel payment with status: {payment.status}")
         
         payment.status = PaymentStatus.CANCELLED
-        payment.updated_at = datetime.now(timezone.utc)
+        payment.updated_at = datetime.utcnow()
         
         await db.flush()
         

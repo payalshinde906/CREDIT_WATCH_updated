@@ -56,7 +56,7 @@ class SubscriptionService:
         if not subscription.is_active:
             return False
         
-        if subscription.expiry_date and subscription.expiry_date < datetime.now(timezone.utc):
+        if subscription.expiry_date and subscription.expiry_date < datetime.utcnow():
             return False
         
         return True
@@ -116,10 +116,10 @@ class SubscriptionService:
         for sub in active_subs:
             sub.is_active = False
             sub.status = MembershipStatus.EXPIRED
-            sub.updated_at = datetime.now(timezone.utc)
+            sub.updated_at = datetime.utcnow()
         
         # Create new subscription
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         expiry_date = now + timedelta(days=plan.validity_days)
         
         new_subscription = Subscription(
@@ -171,7 +171,7 @@ class SubscriptionService:
             raise UserNotFound()
         
         # Calculate new expiry date
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         new_expiry = now + timedelta(days=subscription.plan.validity_days)
         
         subscription.expiry_date = new_expiry
