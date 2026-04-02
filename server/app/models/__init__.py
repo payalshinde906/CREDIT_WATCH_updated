@@ -207,6 +207,7 @@ class PurchaseOrder(Base):
     vendor_email = Column(String, nullable=True)
     vendor_phone = Column(String, nullable=True)
     legal_notice_sent_at = Column(DateTime, nullable=True)
+    legal_support_requested_at = Column(DateTime, nullable=True)
     payment_window_days = Column(Integer, default=50)
 
     # Relationships

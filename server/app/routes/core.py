@@ -536,6 +536,7 @@ async def list_pos(
         if page and page > 1:
             skip = (int(page) - 1) * limit
         stmt = select(PurchaseOrder).where(PurchaseOrder.company_id == current_user.company_id)
+        print(f"LIST_PO QUERY FOR COMPANY: {current_user.company_id}")
         if not include_archived:
             stmt = stmt.where(PurchaseOrder.archived == False)
         stmt = stmt.order_by(PurchaseOrder.created_at.desc()).offset(skip).limit(limit)
@@ -1030,6 +1031,77 @@ async def send_vendor_reminder(po_id: str, req: dict = None, current_user: User 
     except Exception:
         pass
     return ResponseFormatter.create_success(message="Reminder sent successfully")
+
+@po_router.post("/{po_id}/send-to-legal")
+async def send_to_legal_support(po_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Send legal support request for a PO"""
+    # Fetch PO details
+    stmt = select(PurchaseOrder).where((PurchaseOrder.id == po_id) & (PurchaseOrder.user_id == current_user.id))
+    result = await db.execute(stmt)
+    po = result.scalars().first()
+    
+    if not po:
+        raise HTTPException(status_code=404, detail=PO_NOT_FOUND_ERROR)
+    
+    # Calculate days overdue
+    from datetime import date
+    today = date.today()
+    due = po.due_date.date() if hasattr(po.due_date, 'date') else po.due_date
+    days_diff = (today - due).days
+    overdue_text = f"{days_diff} days overdue" if days_diff > 0 else f"{abs(days_diff)} days remaining"
+    
+    subject = f"⚖️ Legal Support Required - PO {po.po_number} - {po.vendor}"
+    
+    body = f"""
+LEGAL SUPPORT REQUEST
+=====================
+
+Dear Legal Support Team,
+
+Admin has requested legal assistance for the following Purchase Order:
+
+PO DETAILS:
+-----------
+PO Number     : {po.po_number}
+Vendor Name   : {po.vendor}
+Vendor Email  : {po.vendor_email}
+Vendor Phone  : {po.vendor_phone}
+Vendor GSTIN  : {po.gstin}
+Amount Due    : Rs.{po.amount}
+Due Date      : {po.due_date}
+Payment Status: {po.status}
+Days Status   : {overdue_text}
+Payment Window: {po.payment_window_days} days
+
+ADDITIONAL INFO:
+----------------
+Legal Notice Sent : {"Yes - " + str(po.legal_notice_sent_at) if po.legal_notice_sent_at else "No"}
+PO Created On     : {po.created_at}
+Requested By      : {current_user.name} ({current_user.email})
+
+Please take appropriate legal action at the earliest.
+
+This is an automated request from CreditDataWatch platform.
+    """
+    
+    # Send to legal support team
+    try:
+        from app.services.email_service import EmailService
+        svc = EmailService()
+        svc.send_email(
+            to_email="payalshinde906@gmail.com",
+            subject=subject,
+            body=body
+        )
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to notify legal support team: {str(e)}")
+    
+    # Update DB - mark legal support requested
+    po.legal_support_requested_at = datetime.utcnow()
+    await db.commit()
+    
+    return {"message": "Legal support team has been notified successfully"}
 
 @po_router.post("/{po_id}/send-legal-notice")
 async def send_legal_notice(po_id: str, request: Request, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):

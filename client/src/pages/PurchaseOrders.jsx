@@ -33,13 +33,15 @@ export default function PurchaseOrders() {
     const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [showCSVImport, setShowCSVImport] = useState(false)
   const [showLegalNotice, setShowLegalNotice] = useState(false);
+  const [showLegalConfirm, setShowLegalNoticeConfirm] = useState(null);
+  const [showLegalSupportConfirm, setShowLegalSupportConfirm] = useState(null);
   const [editingRow, setEditingRow] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [currentPage, setCurrentPage] = useState(1)
     const rowsPerPage = 5
 
-  const activeRows = useMemo(() => rows.filter(r => !r.is_archived), [rows])
-  const archivedRows = useMemo(() => rows.filter(r => r.is_archived), [rows])
+  const activeRows = useMemo(() => rows.filter(r => !r.archived), [rows])
+  const archivedRows = useMemo(() => rows.filter(r => r.archived), [rows])
   const filteredRows = useMemo(() => {
     if (!statusFilter) return activeRows
     const sf = statusFilter.toLowerCase()
@@ -53,41 +55,43 @@ export default function PurchaseOrders() {
     )
   }, [displayRows, currentPage, rowsPerPage])
 
-  const getDaysLeftBadge = (row) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const dueDate = row.due_date ? new Date(row.due_date) : null;
-    if (!dueDate) return <span className="text-gray-400">—</span>;
+  const calculateDaysLeft = (dueDateStr, paymentWindowDays = 0) => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const dueDate = new Date(dueDateStr)
+    dueDate.setHours(0, 0, 0, 0)
+    
+    // Add payment window days to due date
+    const effectiveDueDate = new Date(dueDate)
+    effectiveDueDate.setDate(effectiveDueDate.getDate() + parseInt(paymentWindowDays || 0))
+    
+    const daysLeft = Math.floor((effectiveDueDate - today) / (1000 * 60 * 60 * 24))
+    return daysLeft
+  }
 
+  const getDaysLeftBadge = (row) => {
     const isPaid = row.payment_completed_at || String(row.status || '').toLowerCase() === 'closed' || String(row.status || '').toLowerCase() === 'paid';
     if (isPaid) return <span className="text-gray-400">—</span>;
 
-    const diffTime = dueDate.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const daysLeft = calculateDaysLeft(row.due_date, row.payment_window_days);
 
-    if (diffDays > row.payment_window_days) {
-      return <span className="text-emerald-600 font-medium">{diffDays} days left</span>;
+    if (daysLeft > 7) {
+      return <span className="text-emerald-600 font-medium">{daysLeft} days left</span>;
     }
-    if (diffDays >= 1) {
-      return <span className="text-amber-600 font-medium">{diffDays} days left ⚠️</span>;
+    if (daysLeft >= 1 && daysLeft <= 7) {
+      return <span className="text-amber-600 font-medium">{daysLeft} days left ⚠️</span>;
     }
-    if (diffDays === 0) {
+    if (daysLeft === 0) {
       return <span className="text-red-600 font-bold">Due Today!</span>;
     }
-    return <span className="text-red-600 font-bold">{Math.abs(diffDays)} days overdue</span>;
+    return <span className="text-red-600 font-bold">{Math.abs(daysLeft)} days overdue</span>;
   };
 
   const getStatusBadge = (row) => {
     const statusLower = String(row.status || '').toLowerCase()
     const isPaid = row.payment_completed_at || statusLower === 'closed' || statusLower === 'paid'
-    const isPending = statusLower.includes('pending')
     
-    // Check overdue
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const dueDate = row.due_date ? new Date(row.due_date) : null
-    const isOverdue = !isPaid && dueDate && dueDate < today
-
     if (isPaid) {
       return (
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-200">
@@ -96,7 +100,10 @@ export default function PurchaseOrders() {
         </span>
       )
     }
-    if (isOverdue) {
+
+    const daysLeft = calculateDaysLeft(row.due_date, row.payment_window_days)
+
+    if (daysLeft < 0) {
       return (
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200">
           <span className="w-1.5 h-1.5 mr-1.5 rounded-full bg-red-500"></span>
@@ -104,6 +111,17 @@ export default function PurchaseOrders() {
         </span>
       )
     }
+
+    if (daysLeft === 0) {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
+          <span className="w-1.5 h-1.5 mr-1.5 rounded-full bg-amber-500"></span>
+          Due Today
+        </span>
+      )
+    }
+
+    const isPending = statusLower.includes('pending')
     if (isPending) {
       return (
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
@@ -112,10 +130,11 @@ export default function PurchaseOrders() {
         </span>
       )
     }
+
     return (
       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
         <span className="w-1.5 h-1.5 mr-1.5 rounded-full bg-blue-500"></span>
-        Open
+        {row.status || 'Open'}
       </span>
     )
   }
@@ -132,13 +151,23 @@ export default function PurchaseOrders() {
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
-      const res = await purchaseOrders.list(1, 100, true)
-      if (res.ok && Array.isArray(res.data?.items)) {
-        setRows(res.data.items)
-      } else if (res.ok && Array.isArray(res.data)) {
-        setRows(res.data)
+      setStatusMessage('')
+      try {
+        const res = await purchaseOrders.list(1, 100, true)
+        if (res.ok) {
+          if (Array.isArray(res.data?.items)) {
+            setRows(res.data.items)
+          } else if (Array.isArray(res.data)) {
+            setRows(res.data)
+          }
+        } else {
+          setStatusMessage(res.error || 'Failed to load purchase orders.')
+        }
+      } catch (err) {
+        setStatusMessage('Network error loading purchase orders.')
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
     fetchData()
     // Load credibility index for current user's company
@@ -289,19 +318,48 @@ export default function PurchaseOrders() {
     const handleArchive = async (po) => {
       const res = await purchaseOrders.archive(po.id)
       if (res.ok) {
-        setRows((prev) => prev.map(r => r.id === po.id ? { ...r, is_archived: !r.is_archived } : r))
-        setStatusMessage(po.is_archived ? 'PO restored from archive.' : 'PO archived.')
+        setRows((prev) => prev.map(r => r.id === po.id ? { ...r, archived: !r.archived } : r))
+        setStatusMessage(po.archived ? 'PO restored from archive.' : 'PO archived.')
         window.dispatchEvent(new Event('poChanged'))
       } else {
         setStatusMessage(res.error || 'Failed to archive PO')
       }
     }
+
+    const handleSendToLegal = async (po) => {
+      setIsLoading(true);
+      try {
+        const res = await fetch(`/api/v1/purchase-orders/${po.id}/send-to-legal`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setStatusMessage('Legal support team has been notified successfully');
+          // Update row locally
+          setRows(prev => prev.map(r => r.id === po.id ? { ...r, legal_support_requested_at: new Date().toISOString() } : r));
+        } else {
+          setStatusMessage(data.error || 'Failed to notify legal team');
+        }
+      } catch (err) {
+        setStatusMessage('Network error notifying legal team');
+      } finally {
+        setIsLoading(false);
+        setShowLegalSupportConfirm(null);
+      }
+    };
   
     const handleSendReminder = (po) => {
       setReminderPO(po);
     }
 
     const handleConfirmReminder = async (payload) => {
+      // Step 1: Confirmation logic if legal notice is being sent
+      if (payload.include_legal_notice && !payload.confirmed) {
+        setShowLegalNoticeConfirm({ po: reminderPO, payload });
+        return false;
+      }
+
       const res = await sendPOReminder(reminderPO.id, payload)
       if (res.ok) {
         if (payload.scheduled_at) {
@@ -569,45 +627,51 @@ export default function PurchaseOrders() {
                           {getDaysLeftBadge(row)}
                         </td>
                         <td className="py-5 px-6 whitespace-nowrap">
-                          {editingRow === row.id ? (
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                value={editValue}
-                                onChange={(e) => setEditValue(e.target.value)}
-                                className="w-20 p-1 border rounded focus:ring-2 focus:ring-primary-200 outline-none"
-                                autoFocus
-                              />
-                              <button
-                                onClick={() => {
-                                  handleSaveEdit({ payment_window_days: Number(editValue) });
-                                }}
-                                className="text-emerald-600 hover:text-emerald-700 font-bold p-1"
-                                title="Save"
-                              >
-                                ✅
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingRow(null);
-                                  setEditValue('');
-                                }}
-                                className="text-red-600 hover:text-red-700 font-bold p-1"
-                                title="Cancel"
-                              >
-                                ❌
-                              </button>
-                            </div>
-                          ) : (
-                            <span
-                              className="text-sm text-gray-600 font-medium cursor-pointer group-hover:text-primary-600 flex items-center gap-1"
-                              onClick={() => {
-                                setEditingRow(row.id);
-                                setEditValue(row.payment_window_days || 0);
-                              }}
-                            >
-                              {row.payment_window_days} days <span className="text-xs opacity-0 group-hover:opacity-100 transition-opacity">✏️</span>
+                          {isPaid ? (
+                            <span className="text-sm text-gray-400 font-medium">
+                              {row.payment_window_days || 50} days
                             </span>
+                          ) : (
+                            editingRow === row.id ? (
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  value={editValue}
+                                  onChange={(e) => setEditValue(e.target.value)}
+                                  className="w-20 p-1 border rounded focus:ring-2 focus:ring-primary-200 outline-none"
+                                  autoFocus
+                                />
+                                <button
+                                  onClick={() => {
+                                    handleSaveEdit({ payment_window_days: Number(editValue) });
+                                  }}
+                                  className="text-emerald-600 hover:text-emerald-700 font-bold p-1"
+                                  title="Save"
+                                >
+                                  ✅
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingRow(null);
+                                    setEditValue('');
+                                  }}
+                                  className="text-red-600 hover:text-red-700 font-bold p-1"
+                                  title="Cancel"
+                                >
+                                  ❌
+                                </button>
+                              </div>
+                            ) : (
+                              <span
+                                className="text-sm text-gray-600 font-medium cursor-pointer group-hover:text-primary-600 flex items-center gap-1"
+                                onClick={() => {
+                                  setEditingRow(row.id);
+                                  setEditValue(row.payment_window_days || 0);
+                                }}
+                              >
+                                {row.payment_window_days} days <span className="text-xs opacity-0 group-hover:opacity-100 transition-opacity">✏️</span>
+                              </span>
+                            )
                           )}
                         </td>
                         <td className="py-5 px-6 whitespace-nowrap">
@@ -648,9 +712,25 @@ export default function PurchaseOrders() {
                                 <button
                                   onClick={() => handleArchive(row)}
                                   className="p-1.5 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 transition-colors shadow-sm"
-                                  title={row.is_archived ? 'Restore' : 'Archive'}
+                                  title={row.archived ? 'Restore' : 'Archive'}
                                 >
                                   <span className="text-sm">🗄️</span>
+                                </button>
+                                <button
+                                  onClick={() => setShowLegalSupportConfirm(row)}
+                                  className={`p-1 transition-colors ${
+                                    row.legal_support_requested_at 
+                                      ? 'text-emerald-600' 
+                                      : 'text-gray-500 hover:text-indigo-600 opacity-60 hover:opacity-100'
+                                  }`}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                                  title="Send to Legal Support"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"> 
+                                    <path d="M12 2L8 6H4v2l2 1-4 10h20L18 9l2-1V6h-4L12 2z"/> 
+                                    <path d="M8 6l4 4 4-4"/> 
+                                    <line x1="12" y1="10" x2="12" y2="20"/> 
+                                  </svg> 
                                 </button>
                                 <button
                                   onClick={() => handleDelete(row)}
@@ -893,6 +973,66 @@ export default function PurchaseOrders() {
                     className="flex-1 px-6 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
                   >
                     Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showLegalConfirm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 text-center">
+                <div className="text-4xl mb-4">⚖️</div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Send Legal Notice?</h3>
+                <p className="text-gray-600 mb-6">
+                  Are you sure you want to send a legal notice to:<br/>
+                  <strong>{showLegalConfirm.po.vendor} ({showLegalConfirm.po.vendor_email})</strong><br/><br/>
+                  This action cannot be undone.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowLegalNoticeConfirm(null)}
+                    className="flex-1 px-6 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleConfirmReminder({ ...showLegalConfirm.payload, confirmed: true })}
+                    className="flex-1 px-6 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors font-medium shadow-md"
+                  >
+                    Yes, Send
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showLegalSupportConfirm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 text-center">
+                <div className="text-4xl mb-4">🏛️</div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Send to Legal Support Team?</h3>
+                <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left text-sm space-y-1">
+                  <p><strong>PO:</strong> {showLegalSupportConfirm.po_number}</p>
+                  <p><strong>Vendor:</strong> {showLegalSupportConfirm.vendor}</p>
+                  <p><strong>Amount:</strong> ₹{showLegalSupportConfirm.amount}</p>
+                  <p><strong>Status:</strong> {showLegalSupportConfirm.status}</p>
+                </div>
+                <p className="text-gray-600 mb-6 text-sm">
+                  This will send all details to the legal support team for advocate assistance.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowLegalSupportConfirm(null)}
+                    className="flex-1 px-6 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleSendToLegal(showLegalSupportConfirm)}
+                    className="flex-1 px-6 py-2 rounded-lg bg-[#1a237e] text-white hover:bg-[#0d1440] transition-colors font-medium shadow-md"
+                  >
+                    Send to Legal Team
                   </button>
                 </div>
               </div>

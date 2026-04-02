@@ -76,6 +76,21 @@ export default function Dashboard() {
     }
   }
 
+  const calculateDaysLeft = (dueDateStr, paymentWindowDays = 0) => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const dueDate = new Date(dueDateStr)
+    dueDate.setHours(0, 0, 0, 0)
+    
+    // Add payment window days to due date
+    const effectiveDueDate = new Date(dueDate)
+    effectiveDueDate.setDate(effectiveDueDate.getDate() + parseInt(paymentWindowDays || 0))
+    
+    const daysLeft = Math.floor((effectiveDueDate - today) / (1000 * 60 * 60 * 24))
+    return daysLeft
+  }
+
   const fetchDashboardData = async () => {
     setLoadingData(true)
     try {
@@ -92,12 +107,12 @@ export default function Dashboard() {
 
       // Set stats
       setStats({
-        purchaseOrders: posRes.ok ? (posRes.data?.total || posRes.data?.items?.length || 0) : 0,
-        invoices: invoicesRes.ok ? (invoicesRes.data?.total || invoicesRes.data?.invoices?.length || 0) : 0,
-        defaulters: defaultersRes.ok ? (defaultersRes.data?.total || defaultersRes.data?.items?.length || 0) : 0,
-        creditReports: reportsRes.ok ? (reportsRes.data?.total || reportsRes.data?.items?.length || 0) : 0,
-        settlements: settlementsRes.ok ? (settlementsRes.data?.total || settlementsRes.data?.items?.length || 0) : 0,
-        appointments: appointmentsRes.ok ? (appointmentsRes.data?.length || 0) : 0,
+        purchaseOrders: posRes.ok ? (Array.isArray(posRes.data) ? posRes.data.length : (posRes.data?.items?.length || 0)) : 0,
+        invoices: invoicesRes.ok ? (Array.isArray(invoicesRes.data) ? invoicesRes.data.length : (invoicesRes.data?.invoices?.length || 0)) : 0,
+        defaulters: defaultersRes.ok ? (Array.isArray(defaultersRes.data) ? defaultersRes.data.length : (defaultersRes.data?.items?.length || 0)) : 0,
+        creditReports: reportsRes.ok ? (Array.isArray(reportsRes.data) ? reportsRes.data.length : (reportsRes.data?.items?.length || 0)) : 0,
+        settlements: settlementsRes.ok ? (Array.isArray(settlementsRes.data) ? settlementsRes.data.length : (settlementsRes.data?.items?.length || 0)) : 0,
+        appointments: appointmentsRes.ok ? (Array.isArray(appointmentsRes.data) ? appointmentsRes.data.length : 0) : 0,
         wallet: walletRes.ok ? (walletRes.data?.balance || 0) : 0,
       })
 

@@ -200,6 +200,17 @@ async def lifespan(app: FastAPI):
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_po_created ON purchase_orders (created_at)"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_po_updated ON purchase_orders (updated_at)"))
                 await conn.execute(text("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS payment_window_days INTEGER DEFAULT 50"))
+                # ADDED: legal_support_requested_at column
+                dburl = str(engine.url)
+                is_sqlite_local = dburl.startswith("sqlite")
+                if is_sqlite_local:
+                    try:
+                        await conn.execute(text("ALTER TABLE purchase_orders ADD COLUMN legal_support_requested_at TIMESTAMP"))
+                    except Exception:
+                        pass
+                else:
+                    await conn.execute(text("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS legal_support_requested_at TIMESTAMP WITHOUT TIME ZONE"))
+                
                 # ADDED: Drop any UNIQUE index on po_number to allow duplicates (idempotent)
                 dburl2 = str(engine.url)
                 is_sqlite2 = dburl2.startswith("sqlite")
@@ -207,6 +218,8 @@ async def lifespan(app: FastAPI):
                     await conn.execute(text("DROP INDEX IF EXISTS ix_purchase_orders_po_number"))
                 # backfill company_id from users
                 await conn.execute(text("UPDATE purchase_orders po SET company_id = u.company_id FROM users u WHERE po.user_id = u.id AND po.company_id IS NULL"))
+                # backfill archived column
+                await conn.execute(text("UPDATE purchase_orders SET archived = FALSE WHERE archived IS NULL"))
             logger.info("PurchaseOrder table columns migrated/verified")
         except Exception as e:
             logger.info(f"PurchaseOrder migration step skipped or already applied: {e}")
@@ -278,6 +291,7 @@ async def lifespan(app: FastAPI):
     if getattr(settings, "ENABLE_SCHEDULER", True):
         asyncio.create_task(_daily_tasks_runner())
         asyncio.create_task(_scheduled_reminders_runner())
+        asyncio.create_task(_overdue_legal_notifier_runner())
 
     yield
 
@@ -560,6 +574,62 @@ async def _scheduled_reminders_runner():
             logger.error(f"Error in scheduled reminders runner: {e}")
         
         # Wait for 60 seconds before next check
+        await asyncio.sleep(60)
+
+async def _overdue_legal_notifier_runner():
+    """Checks for newly overdue POs and notifies legal team every minute"""
+    logger.info("Starting frequent overdue legal notifier runner (1m interval)")
+    while True:
+        try:
+            async with AsyncSessionLocal() as db:
+                from datetime import datetime, date
+                today = date.today()
+                
+                # Find POs that just became overdue (due_date < today) 
+                # AND legal_support_requested_at is NULL 
+                # AND status is "Open"
+                # Use scalar_one_or_none or scalars().all()
+                stmt = select(PurchaseOrder).where(
+                    PurchaseOrder.due_date < datetime.combine(today, datetime.min.time()),
+                    PurchaseOrder.status == "Open",
+                    PurchaseOrder.legal_support_requested_at == None
+                )
+                overdue_pos_res = await db.execute(stmt)
+                overdue_pos = overdue_pos_res.scalars().all()
+                
+                if overdue_pos:
+                    logger.info(f"Found {len(overdue_pos)} overdue POs to notify legal team")
+                
+                for po in overdue_pos:
+                    # Send auto email to legal team 
+                    subject = f"⚠️ AUTO ALERT: PO Overdue - {po.po_number} - {po.vendor}"
+                    body = f"""
+AUTOMATIC OVERDUE ALERT 
+======================= 
+
+This is an automatic alert that the following PO is now overdue: 
+
+PO Number : {po.po_number} 
+Vendor    : {po.vendor} 
+Amount    : Rs.{po.amount} 
+Due Date  : {po.due_date} 
+Status    : {po.status} 
+
+Please review and take necessary action. 
+
+CreditDataWatch Automated System 
+                    """
+                    try: 
+                        EmailService().send_email("payalshinde906@gmail.com", subject, body) 
+                        po.legal_support_requested_at = datetime.utcnow() 
+                        logger.info(f"[LEGAL] Auto alert sent for overdue PO: {po.po_number}")
+                    except Exception as e: 
+                        logger.error(f"[LEGAL ERROR] Failed to send auto alert: {e}") 
+                
+                await db.commit()
+        except Exception as e:
+            logger.error(f"Error in overdue legal notifier runner: {e}")
+            
         await asyncio.sleep(60)
 
 # Development/bootstrapping: Ensure developer admin and company exist
