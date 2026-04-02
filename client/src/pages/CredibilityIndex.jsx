@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../state/authContext'
-import { purchaseOrders } from '../services/api/apiClient'
+import { purchaseOrders, credibility } from '../services/api/apiClient'
 
 export default function CredibilityIndex() {
   const { loading, user } = useAuth()
@@ -30,14 +30,9 @@ export default function CredibilityIndex() {
   useEffect(() => { 
     async function loadFromBackend() { 
       try { 
-        const res = await fetch( 
-          'http://localhost:8000/api/v1/credibility', 
-          { credentials: 'include' } 
-        ) 
-        const json = await res.json() 
-        if (json.success && 
-            Array.isArray(json.data)) { 
-          setCompanies(json.data) 
+        const res = await credibility.list()
+        if (res.ok && Array.isArray(res.data)) { 
+          setCompanies(res.data) 
         } 
       } catch (err) { 
         console.error( 

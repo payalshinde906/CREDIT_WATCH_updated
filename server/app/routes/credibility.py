@@ -108,83 +108,53 @@ async def get_credibility(
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    vendor_name = company_id
+    try:
+        # Check if company_id is a name or UUID
+        vendor_name = company_id
+        
+        # Get stats from PO table
+        total, paid, stars = await get_po_stats(vendor_name, db)
+        
+        # Try to find in index table
+        stmt = select(CompanyCredibilityIndex).where(func.lower(CompanyCredibilityIndex.company_name) == vendor_name.lower())
+        res = await db.execute(stmt)
+        idx = res.scalars().first()
+        
+        if idx:
+            grade = idx.grade
+            score = idx.score
+            risk = idx.risk_level
+        else:
+            # Calculate basic grade if not in index
+            score = round((paid / total * 100)) if total > 0 else 0
+            grade = 'D'
+            if score >= 90: grade = 'A'
+            elif score >= 75: grade = 'B'
+            elif score >= 50: grade = 'C'
+            risk = 'Low' if score >= 80 else 'Medium' if score >= 50 else 'High'
 
-    stmt = select(PurchaseOrder).where(
-        (PurchaseOrder.company_id == current_user.company_id) &
-        (func.lower(PurchaseOrder.vendor) == vendor_name.strip().lower())
-    )
-    res = await db.execute(stmt)
-    vendor_pos = res.scalars().all()
-
-    if not vendor_pos:
-        raise HTTPException(
-            status_code=404,
-            detail="Vendor not found"
-        )
-
-    total = len(vendor_pos)
-    total_value = sum( 
-      float(p.amount or 0) 
-      for p in vendor_pos 
-    ) 
-    paid_value = sum( 
-      float(p.amount or 0) 
-      for p in vendor_pos 
-      if p.payment_completed_at or 
-      str(p.status or '').lower() 
-        in ('closed', 'paid') 
-    ) 
-    unpaid_value = total_value - paid_value 
-    avg_value = ( 
-      total_value / total 
-    ) if total else 0 
-
-    paid = sum(
-        1 for p in vendor_pos
-        if p.payment_completed_at or
-        str(p.status or '').lower() in ('closed', 'paid')
-    )
-    pct = (paid / total * 100) if total else 0
-    score = min(100, round(pct))
-    stars = calculate_star_rating(paid, total)
-
-    if score >= 90: grade = 'A'
-    elif score >= 75: grade = 'B'
-    elif score >= 60: grade = 'C'
-    else: grade = 'D'
-
-    if score >= 75: risk = 'Low'
-    elif score >= 50: risk = 'Medium'
-    else: risk = 'High'
-
-    return ResponseFormatter.create_success(
-        data={
-            "company_id": vendor_name,
+        data = {
             "company_name": vendor_name,
             "score": score,
             "grade": grade,
             "risk_level": risk,
             "stars": stars,
-            "ai_summary": None,
-            "calculation_window_days": 90,
             "metrics": {
                 "total_pos": total,
                 "paid_on_time": paid,
-                "paid_late": 0,
                 "unpaid": total - paid,
+                "fulfillment_rate": round((paid / total * 100)) if total > 0 else 0,
                 "avg_delay_days": 0,
-                "max_delay_days": 0,
-                "overdue_count": total - paid,
-                "fulfillment_rate": round(pct, 1),
-                "total_value": round(total_value, 2), 
-                "paid_value": round(paid_value, 2), 
-                "unpaid_value": round(unpaid_value, 2), 
-                "avg_value": round(avg_value, 2)
-            },
-            "last_calculated_at": None
+                "total_value": 0,
+                "paid_value": 0,
+                "unpaid_value": 0,
+                "avg_value": 0
+            }
         }
-    )
+        return ResponseFormatter.create_success(data=data)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return ResponseFormatter.create_error(str(e), status_code=500)
 
 @router.post("/{company_id}/ai-analysis")
 async def get_ai_analysis(company_id: str, current_user = Depends(get_current_user), db: AsyncSession = Depends(get_db)):

@@ -286,6 +286,13 @@ export const invitations = {
   acceptStrict: (data) => apiRequest('/invitations/accept-invitation', { method: 'POST', body: JSON.stringify(data) }),
 }
 
+export const credibility = {
+  list: () => apiRequest('/credibility'),
+  get: (id) => apiRequest(`/credibility/${id}`),
+  getAiAnalysis: (id) => apiRequest(`/credibility/${id}/ai-analysis`, { method: 'POST' }),
+  recalculate: () => apiRequest('/credibility/recalculate', { method: 'POST' }),
+}
+
 export const drive = {
   getAuthUrl: () => apiRequest('/drive/auth-url'),
   callback: (code, state) => apiRequest('/drive/callback', { method: 'POST', body: JSON.stringify({ code, state }) }),

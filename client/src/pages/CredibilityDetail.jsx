@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAuth } from '../state/authContext'
+import { credibility, sendChatMessage } from '../services/api/apiClient'
 
 const GRADE_COLOR = {
   A: 'bg-green-100 text-green-700',
@@ -99,13 +100,9 @@ CredibilityDetail() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(
-          `/api/v1/credibility/${companyId}`,
-          { credentials: 'include' }
-        )
-        const json = await res.json()
-        if (json.success) {
-          setData(json.data || null)
+        const res = await credibility.get(companyId)
+        if (res.ok) {
+          setData(res.data || null)
         }
       } catch (err) {
         console.error('Load error:', err)
@@ -118,16 +115,9 @@ CredibilityDetail() {
     if (aiAnalysis) return
     setLoadingAi(true)
     try {
-      const res = await fetch(
-        `/api/v1/credibility/${companyId}/ai-analysis`,
-        {
-          method: 'POST',
-          credentials: 'include'
-        }
-      )
-      const json = await res.json()
-      if (json.success) {
-        setAiAnalysis(json.data)
+      const res = await credibility.getAiAnalysis(companyId)
+      if (res.ok) {
+        setAiAnalysis(res.data)
       }
     } catch (err) {
       console.error('AI error:', err)
@@ -141,12 +131,7 @@ CredibilityDetail() {
     if (aiRec || !d) return
     setLoadingRec(true)
     try {
-      const res = await fetch('/api/v1/chat', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: `Should I deal with ${
+      const res = await sendChatMessage(`Should I deal with ${
             d.company_name
           }? They have a credit score of ${
             d.score
@@ -154,13 +139,12 @@ CredibilityDetail() {
             d.risk_level
           }. Their PO fulfillment rate is ${(
             d.metrics.fulfillment_rate
-          ).toFixed(2)}%`
-        })
-      })
-      const json = await res.json()
-      const text = json.response ||
-        json.message ||
-        json.reply || ''
+          ).toFixed(2)}%`)
+      
+      const json = res.data
+      const text = json?.response ||
+        json?.message ||
+        json?.reply || ''
 
       // Try JSON parse first
       try {
