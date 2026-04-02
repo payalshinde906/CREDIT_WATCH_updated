@@ -175,7 +175,7 @@ export default function CredibilityIndex() {
                   </td>
                   <td className="p-2">
                     <Link 
-                      to={`/credibility-index/${r.company_id || r.company_name}`} 
+                      to={`/credibility-index/${r.company_id}`} 
                       className="text-primary-700 font-medium hover:underline"
                     >
                       View

@@ -40,8 +40,8 @@ class EmailService:
             logger.info(f"Sending email | From: {msg['From']} To: {to_email} Subject: {subject}")
 
             context = ssl.create_default_context()
-            # Force port 465 for SMTP_SSL as per requirement
-            with smtplib.SMTP_SSL(self.smtp_host, 465, context=context) as server:
+            # Use SSL as per requirement
+            with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, context=context) as server:
                 server.login(self.smtp_user, self.smtp_password)
                 server.send_message(msg)
 
@@ -72,8 +72,8 @@ class EmailService:
             logger.info(f"Sending email | From: {msg['From']} To: {to_email} Subject: {subject}")
 
             context = ssl.create_default_context()
-            # Force port 465 for SMTP_SSL as per requirement
-            with smtplib.SMTP_SSL(self.smtp_host, 465, context=context) as server:
+            # Use SSL as per requirement
+            with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, context=context) as server:
                 server.login(self.smtp_user, self.smtp_password)
                 server.send_message(msg)
 

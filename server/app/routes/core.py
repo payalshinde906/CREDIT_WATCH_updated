@@ -368,6 +368,16 @@ async def create_po(req: dict, request: Request, current_user: User = Depends(ge
         v_phone = v_phone_fmt
     # REMOVED (ADDED WRAP): Allow duplicate PO numbers by bypassing previous duplicate checks
     # This block intentionally no-ops to preserve additive-only rule while removing restriction.
+    # Ensure payment_window_days is an integer
+    pw_days = req.get("payment_window_days", 50)
+    try:
+        if pw_days is None or str(pw_days).strip() == "":
+            pw_days = 50
+        else:
+            pw_days = int(pw_days)
+    except Exception:
+        pw_days = 50
+
     po = PurchaseOrder(
         id=str(uuid.uuid4()),
         user_id=current_user.id,
@@ -385,7 +395,7 @@ async def create_po(req: dict, request: Request, current_user: User = Depends(ge
         supplier_address=req.get("supplier_address"),
         delivery_address=req.get("delivery_address"),
         invoice_address=req.get("invoice_address"),
-        payment_window_days=req.get("payment_window_days", 50),
+        payment_window_days=pw_days,
     )
     try:
         db.add(po)
@@ -1115,6 +1125,9 @@ async def send_legal_notice(po_id: str, request: Request, current_user: User = D
     po = result.scalars().first()
     if not po:
         raise HTTPException(status_code=404, detail=PO_NOT_FOUND_ERROR)
+
+    if not po.vendor_email:
+        raise HTTPException(status_code=400, detail="Vendor email is required to send legal notice")
 
     # Clean email body - NO legal notice text here
     email_body = f"""Dear {po.vendor},

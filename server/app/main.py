@@ -40,10 +40,87 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+import subprocess
+import requests
+import time
+
+def ensure_ollama_running():
+    """Auto-start Ollama if not running."""
+    try:
+        # Check if already running
+        r = requests.get("http://localhost:11434/api/tags", timeout=3)
+        if r.status_code == 200:
+            print("[OLLAMA] Already running ✅")
+            return True
+    except:
+        pass
+    
+    # Not running — start it
+    try:
+        print("[OLLAMA] Starting Ollama server...")
+        subprocess.Popen(
+            ["ollama", "serve"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW  # no cmd window popup
+        )
+        # Wait for Ollama to be ready
+        for i in range(10):
+            time.sleep(2)
+            try:
+                r = requests.get("http://localhost:11434/api/tags", timeout=3)
+                if r.status_code == 200:
+                    print("[OLLAMA] Started successfully ✅")
+                    return True
+            except:
+                print(f"[OLLAMA] Waiting for startup... ({i+1}/10)")
+        print("[OLLAMA] Failed to start after 20 seconds ❌")
+        return False
+    except FileNotFoundError:
+        print("[OLLAMA] Ollama not installed or not in PATH ❌")
+        return False
+    except Exception as e:
+        print(f"[OLLAMA] Error starting: {e}")
+        return False
+
+
+def ensure_model_available(model: str = "llama3"):
+    """Auto-pull model if not already downloaded."""
+    try:
+        r = requests.get("http://localhost:11434/api/tags", timeout=5)
+        if r.status_code == 200:
+            models = [m['name'] for m in r.json().get('models', [])]
+            model_names = [m.split(':')[0] for m in models]
+            if model in model_names:
+                print(f"[OLLAMA] Model '{model}' already available ✅")
+                return True
+            else:
+                print(f"[OLLAMA] Pulling '{model}' model... (may take a few minutes)")
+                result = subprocess.run(
+                    ["ollama", "pull", model],
+                    capture_output=True,
+                    text=True
+                )
+                if result.returncode == 0:
+                    print(f"[OLLAMA] Model '{model}' downloaded ✅")
+                    return True
+                else:
+                    print(f"[OLLAMA] Pull failed: {result.stderr}")
+                    return False
+    except Exception as e:
+        print(f"[OLLAMA] Model check failed: {e}")
+        return False
+
 # Create tables on startup
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
+    # Auto-start Ollama
+    print("[STARTUP] Checking Ollama...")
+    ollama_ok = ensure_ollama_running()
+    if ollama_ok:
+        ensure_model_available("llama3")
+
     # Startup
     logger.info("Starting CreditDataWatch API...")
     try:

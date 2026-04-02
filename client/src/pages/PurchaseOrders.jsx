@@ -229,7 +229,7 @@ export default function PurchaseOrders() {
       due_date: form.due_date,
       status: form.status,
       document_url: form.document_url || '',
-      payment_window_days: form.payment_window_days,
+      payment_window_days: parseInt(form.payment_window_days || 50),
     }
 
     setIsLoading(true)
@@ -717,14 +717,15 @@ export default function PurchaseOrders() {
                                   <span className="text-sm">🗄️</span>
                                 </button>
                                 <button
-                                  onClick={() => setShowLegalSupportConfirm(row)}
+                                  onClick={() => !isPaid && setShowLegalSupportConfirm(row)}
+                                  disabled={isPaid}
                                   className={`p-1 transition-colors ${
                                     row.legal_support_requested_at 
                                       ? 'text-emerald-600' 
-                                      : 'text-gray-500 hover:text-indigo-600 opacity-60 hover:opacity-100'
+                                      : isPaid ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500 hover:text-indigo-600 opacity-60 hover:opacity-100'
                                   }`}
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-                                  title="Send to Legal Support"
+                                  style={{ background: 'none', border: 'none', cursor: isPaid ? 'not-allowed' : 'pointer', opacity: isPaid ? 0.3 : 1 }}
+                                  title={isPaid ? 'Not available for paid POs' : 'Send to Legal Support'}
                                 >
                                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"> 
                                     <path d="M12 2L8 6H4v2l2 1-4 10h20L18 9l2-1V6h-4L12 2z"/> 

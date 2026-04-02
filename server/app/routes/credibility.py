@@ -70,6 +70,11 @@ async def list_credibility(current_user = Depends(get_current_user), db: AsyncSe
     
     data = [] 
     for vendor_name in vendors: 
+        # Try to find real company ID for this vendor name 
+        stmt_comp = select(Company.id).where(func.lower(Company.company_name) == vendor_name.lower()) 
+        res_comp = await db.execute(stmt_comp) 
+        real_id = res_comp.scalar() or vendor_name 
+         
         total, paid, stars = await get_po_stats( 
             vendor_name, db 
         ) 
@@ -83,7 +88,7 @@ async def list_credibility(current_user = Depends(get_current_user), db: AsyncSe
         elif score >= 50: risk = 'Medium' 
         else: risk = 'High' 
         data.append({ 
-            "company_id": vendor_name, 
+            "company_id": real_id, 
             "company_name": vendor_name, 
             "score": score, 
             "grade": grade, 
@@ -110,13 +115,41 @@ async def get_credibility(
 ):
     try:
         # Check if company_id is a name or UUID
+        import uuid
+        is_uuid = False
+        try:
+            uuid.UUID(company_id)
+            is_uuid = True
+        except ValueError:
+            is_uuid = False
+
         vendor_name = company_id
+        if is_uuid:
+            # Find company by ID
+            stmt = select(Company).where(Company.id == company_id)
+            res = await db.execute(stmt)
+            comp = res.scalars().first()
+            if comp:
+                vendor_name = comp.company_name
+            else:
+                # If UUID but no company found, try to find in index table by ID
+                stmt = select(CompanyCredibilityIndex).where(CompanyCredibilityIndex.company_id == company_id)
+                res = await db.execute(stmt)
+                idx_row = res.scalars().first()
+                if idx_row:
+                    # We might need the name, but if we only have the ID in index, we might need to join
+                    stmt = select(Company.company_name).join(CompanyCredibilityIndex, Company.id == CompanyCredibilityIndex.company_id).where(CompanyCredibilityIndex.company_id == company_id)
+                    res = await db.execute(stmt)
+                    vendor_name = res.scalar() or company_id
         
-        # Get stats from PO table
+        # Get stats from PO table using the name
         total, paid, stars = await get_po_stats(vendor_name, db)
         
-        # Try to find in index table
-        stmt = select(CompanyCredibilityIndex).where(func.lower(CompanyCredibilityIndex.company_name) == vendor_name.lower())
+        # Try to find in index table by name
+        stmt = select(CompanyCredibilityIndex).where(func.lower(CompanyCredibilityIndex.company_id) == company_id.lower())
+        if is_uuid:
+             stmt = select(CompanyCredibilityIndex).where(CompanyCredibilityIndex.company_id == company_id)
+        
         res = await db.execute(stmt)
         idx = res.scalars().first()
         
