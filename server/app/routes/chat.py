@@ -102,13 +102,26 @@ Intelligence Hub.
                 },
                 timeout=30.0
             )
+            
+            if response.status_code == 404:
+                return ResponseFormatter.create_success(data={"reply": "AI model 'llama3' not found. Please run 'ollama pull llama3' on the server."})
+            
             response.raise_for_status()
             data = response.json()
             reply = data.get("response", "").strip()
             # Format response as numbered steps
-            reply = "\n".join(f"{i+1}. {line}" for i, line in enumerate(reply.split("\n")))
+            if reply:
+                reply = "\n".join(f"{i+1}. {line}" for i, line in enumerate(reply.split("\n")) if line.strip())
+            else:
+                reply = "I received an empty response from the AI. Please try again."
+                
             return ResponseFormatter.create_success(data={"reply": reply})
-    except httpx.RequestError:
-        return ResponseFormatter.create_success(data={"reply": "I am currently unavailable. Please try again later."})
+            
+    except (httpx.ConnectError, httpx.TimeoutException):
+        return ResponseFormatter.create_success(data={"reply": "AI service (Ollama) is not running or timed out. Please ensure Ollama is started on port 11434."})
+    except httpx.HTTPStatusError as e:
+        return ResponseFormatter.create_success(data={"reply": f"AI service returned an error: {e.response.status_code}. Please try again later."})
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        traceback.print_exc()
+        return ResponseFormatter.create_success(data={"reply": f"An unexpected error occurred in the chat system: {str(e)}"})

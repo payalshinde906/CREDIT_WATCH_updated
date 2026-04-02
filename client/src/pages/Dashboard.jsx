@@ -320,82 +320,100 @@ export default function Dashboard() {
           <QuickActions />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+        {/* Smaller Dashboard Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
           {/* Recent Activity */}
-          <div className="card p-4 shadow-sm rounded-xl h-full">
-            <h2 className="text-lg font-heading font-semibold text-gray-700 mb-3">Recent Activity</h2>
-            {loadingData && (
-              <p className="text-xs text-gray-500">Loading activity...</p>
-            )}
-            {!loadingData && recentActivity.length === 0 && (
-              <p className="text-xs text-gray-500 py-2">No recent activity</p>
-            )}
-            {!loadingData && recentActivity.length > 0 && (
-              <div className="space-y-2">
-                {recentActivity.map((activity) => (
-                  <Link
-                    key={`${activity.type}-${activity.title}`}
-                    to={activity.link}
-                    className="flex items-start gap-2 p-2 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <span className="text-lg">{getActivityIcon(activity.type)}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-gray-900 truncate">{activity.title}</p>
-                      <p className="text-[10px] text-gray-600 truncate">{activity.description}</p>
-                      <p className="text-[9px] text-gray-400 mt-0.5">{formatDate(activity.date)}</p>
-                    </div>
-                  </Link>
-                ))}
+          <div className="flex items-center gap-4 px-5 py-3 rounded-xl border border-blue-200 shadow-sm border-l-4 border-l-blue-400 bg-white hover:shadow-md transition-shadow">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-sm">🕐</span>
+                <h2 className="text-xs text-gray-500 uppercase font-semibold">Recent Activity</h2>
               </div>
-            )}
+              {loadingData && (
+                <p className="text-xs text-gray-500">Loading activity...</p>
+              )}
+              {!loadingData && recentActivity.length === 0 && (
+                <p className="text-xs text-gray-500 py-1">No recent activity</p>
+              )}
+              {!loadingData && recentActivity.length > 0 && (
+                <div className="space-y-1 overflow-y-auto max-h-24 pr-1">
+                  {recentActivity.slice(0, 3).map((activity) => (
+                    <Link
+                      key={`${activity.type}-${activity.title}`}
+                      to={activity.link}
+                      className="flex items-start gap-2 p-1 rounded hover:bg-gray-50 transition-colors"
+                    >
+                      <span className="text-sm">{getActivityIcon(activity.type)}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-semibold text-gray-900 truncate">{activity.title}</p>
+                        <p className="text-[9px] text-gray-600 truncate">{activity.description}</p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Due Reminders */}
-          <div className="card p-4 shadow-sm rounded-xl h-full">
-            <h2 className="text-lg font-heading font-semibold text-gray-700 mb-3">Due Reminders</h2>
-            {loadingData && (
-              <p className="text-xs text-gray-500">Loading...</p>
-            )}
-            {!loadingData && dueReminders.length === 0 && (
-              <p className="text-xs text-gray-500 py-2">No reminders due</p>
-            )}
-            {!loadingData && dueReminders.length > 0 && (
-              <div className="space-y-2">
-                {dueReminders.map((invoice) => (
-                  <div key={invoice.id} className="p-2 bg-yellow-50 border border-yellow-100 rounded-lg">
-                    <p className="text-xs font-semibold text-gray-900">{invoice.invoice_number}</p>
-                    <p className="text-[10px] text-gray-600">{invoice.counterparty_name}</p>
-                    <div className="flex justify-between items-end mt-1">
-                      <p className="text-xs font-bold text-yellow-800">
-                        {formatCurrency(invoice.amount)}
-                      </p>
-                      <p className="text-[9px] text-gray-500">Due: {formatDate(invoice.due_date)}</p>
-                    </div>
-                  </div>
-                ))}
-                <Link
-                  to="/invoices"
-                  className="text-xs text-blue-600 hover:underline inline-block mt-1"
-                >
-                  View all →
-                </Link>
+          <div className="flex items-center gap-4 px-5 py-3 rounded-xl border border-gray-100 shadow-sm border-l-4 border-orange-500 bg-white hover:shadow-md transition-shadow">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-sm">🔔</span>
+                <h2 className="text-xs text-gray-500 uppercase font-semibold">Due Reminders</h2>
               </div>
-            )}
+              {loadingData && (
+                <p className="text-xs text-gray-500">Loading...</p>
+              )}
+              {!loadingData && dueReminders.length === 0 && (
+                <p className="text-xs text-gray-500 py-1">No reminders due</p>
+              )}
+              {!loadingData && dueReminders.length > 0 && (
+                <div className="space-y-1 overflow-y-auto max-h-24 pr-1">
+                  {dueReminders.slice(0, 2).map((invoice) => (
+                    <div key={invoice.id} className="p-1 bg-orange-50/50 border border-orange-100 rounded">
+                      <p className="text-[10px] font-semibold text-gray-900 truncate">{invoice.invoice_number}</p>
+                      <div className="flex justify-between items-center mt-0.5">
+                        <p className="text-[9px] font-bold text-orange-800">
+                          {formatCurrency(invoice.amount)}
+                        </p>
+                        <p className="text-[8px] text-gray-500">Due: {formatDate(invoice.due_date)}</p>
+                      </div>
+                    </div>
+                  ))}
+                  <Link
+                    to="/invoices"
+                    className="text-[9px] text-blue-600 hover:underline inline-block"
+                  >
+                    View all →
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Notifications */}
           <NotificationsPanel dueReminders={dueReminders} />
 
           {/* Plan Info */}
-          <div className="card p-4 space-y-2 text-xs text-gray-700 shadow-sm rounded-xl h-full">
-            <p className="font-semibold text-sm text-gray-700">Subscription</p>
-            <div className="flex justify-between">
-              <span>Current: {planLabel}</span>
-              <span className="text-emerald-600 font-medium">{planStatus}</span>
+          <div className="flex items-center gap-4 px-5 py-3 rounded-xl border border-gray-100 shadow-sm border-l-4 border-purple-500 bg-white hover:shadow-md transition-shadow">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-sm">💳</span>
+                <h2 className="text-xs text-gray-500 uppercase font-semibold">Subscription</h2>
+              </div>
+              <div className="flex flex-col gap-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-medium text-gray-700">{planLabel}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${subscription?.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    {planStatus}
+                  </span>
+                </div>
+                <Link to="/membership" className="inline-flex items-center justify-center bg-gray-50 border border-gray-200 text-gray-700 py-1 rounded text-[10px] font-semibold hover:bg-gray-100 transition-colors">
+                  Manage Plan
+                </Link>
+              </div>
             </div>
-            <Link to="/membership" className="btn-secondary w-full text-center py-2 text-xs">
-              Manage Plan
-            </Link>
           </div>
         </div>
 

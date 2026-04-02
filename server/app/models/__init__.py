@@ -206,6 +206,8 @@ class PurchaseOrder(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     vendor_email = Column(String, nullable=True)
     vendor_phone = Column(String, nullable=True)
+    legal_notice_sent_at = Column(DateTime, nullable=True)
+    payment_window_days = Column(Integer, default=50)
 
     # Relationships
     user = relationship("User", back_populates="purchase_orders")
@@ -586,4 +588,10 @@ class SOPDocument(Base):
         String(36), 
         nullable=True 
     ) 
+
+class AppSettings(Base):
+    __tablename__ = "app_settings"
+    id = Column(String(36), primary_key=True, index=True)
+    payment_window_days = Column(Integer, nullable=False, default=50)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

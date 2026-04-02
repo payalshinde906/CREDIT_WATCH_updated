@@ -47,7 +47,9 @@ class EmailService:
 
             logger.info(f"Email sent to {to_email}")
         except Exception as e:
+            import traceback
             logger.error(f"Email FAILED: {str(e)}")
+            traceback.print_exc()
             raise e
 
     def send_email_html(self, to_email: str, subject: str, html: str, text_fallback: str | None = None):
@@ -78,7 +80,7 @@ class EmailService:
             logger.info(f"HTML email sent to {to_email}")
         except Exception as e:
             logger.error(f"Email FAILED: {str(e)}")
-            raise e
+            raise
 
     @staticmethod
     async def send_registration_email(to_email: str, company_name: str, phone: str) -> None:
@@ -129,3 +131,58 @@ class EmailService:
             svc.send_email_html(to_email, subject, html, text_fallback=text_fallback)
         except Exception as e:
             logger.warning("Invitation email failed (invitation still valid): %s", e)
+
+
+async def send_email_with_attachment(
+    to_email: str,
+    subject: str,
+    body: str,
+    attachment_path: str = None,
+    attachment_name: str = "Legal_Notice.pdf"
+):
+    import smtplib, ssl
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.mime.base import MIMEBase
+    from email import encoders
+    import os
+
+    # Use EmailService logic for consistency
+    svc = EmailService()
+    
+    msg = MIMEMultipart()
+    msg['From'] = svc.from_header
+    msg['To'] = to_email
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'plain'))
+
+    if attachment_path and os.path.exists(attachment_path):
+        with open(attachment_path, 'rb') as f:
+            part = MIMEBase('application', 'octet-stream')
+            part.set_payload(f.read())
+            encoders.encode_base64(part)
+            part.add_header(
+                'Content-Disposition',
+                f'attachment; filename="{attachment_name}"'
+            )
+            msg.attach(part)
+        print(f"[EMAIL] Attaching PDF: {attachment_name}")
+    else:
+        print(f"[EMAIL] No attachment found at: {attachment_path}")
+
+    try:
+        context = ssl.create_default_context()
+        if svc.smtp_port == 465:
+            with smtplib.SMTP_SSL(svc.smtp_host, 465, context=context) as server:
+                server.login(svc.smtp_user, svc.smtp_password)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(svc.smtp_host, svc.smtp_port) as server:
+                server.starttls(context=context)
+                server.login(svc.smtp_user, svc.smtp_password)
+                server.send_message(msg)
+        print(f"[EMAIL] Email with attachment sent to: {to_email}")
+        return True
+    except Exception as e:
+        print(f"[EMAIL] Failed to send email with attachment: {str(e)}")
+        return False

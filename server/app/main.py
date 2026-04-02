@@ -193,11 +193,13 @@ async def lifespan(app: FastAPI):
                 else:
                     await conn.execute(text("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS vendor_email VARCHAR(255)"))
                     await conn.execute(text("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS vendor_phone VARCHAR(20)"))
+                await conn.execute(text("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS legal_notice_sent_at TIMESTAMP WITHOUT TIME ZONE"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_po_company_status ON purchase_orders (company_id, status)"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_po_gstin ON purchase_orders (gstin)"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_po_payment ON purchase_orders (payment_completed_at)"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_po_created ON purchase_orders (created_at)"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_po_updated ON purchase_orders (updated_at)"))
+                await conn.execute(text("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS payment_window_days INTEGER DEFAULT 50"))
                 # ADDED: Drop any UNIQUE index on po_number to allow duplicates (idempotent)
                 dburl2 = str(engine.url)
                 is_sqlite2 = dburl2.startswith("sqlite")
@@ -244,6 +246,23 @@ async def lifespan(app: FastAPI):
             logger.info("scheduled_reminders table verified")
         except Exception as e:
             logger.info(f"scheduled_reminders migration failed: {e}")
+        try:
+            # Migration: create app_settings table
+            async with engine.begin() as conn:
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS app_settings (
+                        id VARCHAR(36) PRIMARY KEY,
+                        payment_window_days INTEGER DEFAULT 50,
+                        updated_at TIMESTAMP DEFAULT NOW()
+                    )
+                """))
+                # Insert default settings if not present
+                res = await conn.execute(text("SELECT id FROM app_settings LIMIT 1"))
+                if res.first() is None:
+                    await conn.execute(text("INSERT INTO app_settings (id, payment_window_days) VALUES ('default', 50)"))
+            logger.info("app_settings table verified")
+        except Exception as e:
+            logger.info(f"app_settings migration failed: {e}")
         logger.info("Database tables created/verified")
         try:
             await _ensure_dev_admin()  # idempotent bootstrap for developer admin and company
@@ -253,6 +272,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Database connection failed during startup: {e}")
         logger.info("Continuing without database initialization...")
+
+    # Start background tasks
+    import asyncio
+    if getattr(settings, "ENABLE_SCHEDULER", True):
+        asyncio.create_task(_daily_tasks_runner())
+        asyncio.create_task(_scheduled_reminders_runner())
 
     yield
 
@@ -303,9 +328,15 @@ _cors_regex = re.compile(r"^http://localhost:\d{4}$")
 async def _cors_fallback(request, call_next):
     try:
         response = await call_next(request)
-    except Exception:
-        from fastapi.responses import PlainTextResponse
-        response = PlainTextResponse("Internal Server Error", status_code=500)
+    except Exception as e:
+        import traceback
+        logger.error(f"Middleware caught unhandled exception: {e}")
+        traceback.print_exc()
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "message": "Internal Server Error", "detail": str(e)}
+        )
     origin = request.headers.get("origin")
     if origin and (origin in _cors_origins or _cors_regex.match(origin)):
         response.headers["Access-Control-Allow-Origin"] = origin
@@ -485,34 +516,51 @@ async def _daily_tasks_runner():
                                     pass
                     
                     # Process SCHEDULED reminders
-                    from app.models import ScheduledReminder
-                    now = datetime.utcnow()
-                    q_sched = select(ScheduledReminder, PurchaseOrder).join(
-                        PurchaseOrder, ScheduledReminder.purchase_order_id == PurchaseOrder.id
-                    ).where(
-                        (ScheduledReminder.scheduled_at <= now) &
-                        (ScheduledReminder.sent_at.is_(None))
-                    )
-                    sched_res = await session.execute(q_sched)
-                    for sr, po in sched_res.all():
-                        if po.vendor_email:
-                            try:
-                                EmailService().send_email(po.vendor_email, sr.subject, sr.body)
-                                sr.sent_at = datetime.utcnow()
-                                await session.commit()
-                            except Exception:
-                                pass
+                    # (Logic moved to frequent scheduler for responsiveness)
+                    pass
                 except Exception as e:
                     logger.error(f"Error in background reminder tasks: {e}")
                 await session.commit()
         except Exception as e:
             logger.error(f"Daily tasks failed: {e}")
 
-@app.on_event("startup")
-async def _start_schedulers():
-    from app.config import settings
-    if getattr(settings, "ENABLE_SCHEDULER", True):
-        asyncio.create_task(_daily_tasks_runner())
+async def _scheduled_reminders_runner():
+    """Checks for due scheduled reminders every minute"""
+    logger.info("Starting frequent scheduled reminders runner (1m interval)")
+    while True:
+        try:
+            async with AsyncSessionLocal() as session:
+                from app.models import ScheduledReminder, PurchaseOrder
+                now = datetime.utcnow()
+                # Find reminders due now or in the past that haven't been sent
+                q_sched = select(ScheduledReminder, PurchaseOrder).join(
+                    PurchaseOrder, ScheduledReminder.purchase_order_id == PurchaseOrder.id
+                ).where(
+                    (ScheduledReminder.scheduled_at <= now) &
+                    (ScheduledReminder.sent_at.is_(None))
+                )
+                sched_res = await session.execute(q_sched)
+                tasks = sched_res.all()
+                if tasks:
+                    logger.info(f"Found {len(tasks)} due reminders to process")
+                
+                for sr, po in tasks:
+                    if po.vendor_email:
+                        try:
+                            logger.info(f"Sending scheduled reminder {sr.id} to {po.vendor_email}")
+                            EmailService().send_email(po.vendor_email, sr.subject, sr.body)
+                            sr.sent_at = datetime.utcnow()
+                            # Use a separate commit per reminder to ensure progress is saved
+                            await session.commit()
+                        except Exception as e:
+                            logger.error(f"Failed to send scheduled reminder {sr.id}: {e}")
+                
+                await session.commit()
+        except Exception as e:
+            logger.error(f"Error in scheduled reminders runner: {e}")
+        
+        # Wait for 60 seconds before next check
+        await asyncio.sleep(60)
 
 # Development/bootstrapping: Ensure developer admin and company exist
 try:

@@ -41,6 +41,7 @@ import CMSPageEditor from '../pages/admin/CMSPageEditor'
 import TeamManagement from '../pages/admin/TeamManagement'
 import POReminderConfig from '../pages/admin/POReminderConfig'
 import SOPUpload from '../pages/admin/SOPUpload'
+import AdminSettings from '../pages/AdminSettings';
 import CMSPageRenderer from '../components/cms/CMSPageRenderer'
 import ProtectedRoute from '../components/ProtectedRoute'
 import CredibilityIndex from '../pages/CredibilityIndex'
@@ -125,13 +126,22 @@ export default function AppRoutes() {
           )}
         />
         <Route
-          path="/admin/sop-upload"
-          element={(
-            <ProtectedRoute requiredRole="admin">
-              <SOPUpload />
-            </ProtectedRoute>
-          )}
-        />
+            path="/admin/sop-upload"
+            element={(
+              <ProtectedRoute requiredRole="admin">
+                <SOPUpload />
+              </ProtectedRoute>
+            )}
+          />
+
+          <Route
+            path="/admin/settings"
+            element={(
+              <ProtectedRoute requiredRole="MASTER_ADMIN">
+                <AdminSettings />
+              </ProtectedRoute>
+            )}
+          />
 
         <Route
           path="/admin/cms/edit/:slug"

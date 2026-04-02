@@ -124,6 +124,22 @@ async def get_credibility(
         )
 
     total = len(vendor_pos)
+    total_value = sum( 
+      float(p.amount or 0) 
+      for p in vendor_pos 
+    ) 
+    paid_value = sum( 
+      float(p.amount or 0) 
+      for p in vendor_pos 
+      if p.payment_completed_at or 
+      str(p.status or '').lower() 
+        in ('closed', 'paid') 
+    ) 
+    unpaid_value = total_value - paid_value 
+    avg_value = ( 
+      total_value / total 
+    ) if total else 0 
+
     paid = sum(
         1 for p in vendor_pos
         if p.payment_completed_at or
@@ -160,7 +176,11 @@ async def get_credibility(
                 "avg_delay_days": 0,
                 "max_delay_days": 0,
                 "overdue_count": total - paid,
-                "fulfillment_rate": round(pct, 1)
+                "fulfillment_rate": round(pct, 1),
+                "total_value": round(total_value, 2), 
+                "paid_value": round(paid_value, 2), 
+                "unpaid_value": round(unpaid_value, 2), 
+                "avg_value": round(avg_value, 2)
             },
             "last_calculated_at": None
         }

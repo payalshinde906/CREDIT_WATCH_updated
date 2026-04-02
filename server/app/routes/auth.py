@@ -143,13 +143,20 @@ async def login_send_email_otp(
     request: EmailLoginSendOTPRequest,
     http_request: Request,
 ):
-    result = await OTPService.send_otp_for_login_email(request.email)
-    logger.info(f"Login OTP sent to {request.email}")
-    return ResponseFormatter.create_success(
-        data={"sent": result["sent"]},
-        message="OTP sent to email",
-        request_id=http_request.state.request_id,
-    )
+    print(f"DEBUG: auth.py - Received login_send_email_otp for {request.email}")
+    try:
+        result = await OTPService.send_otp_for_login_email(request.email)
+        logger.info(f"Login OTP sent to {request.email}")
+        return ResponseFormatter.create_success(
+            data={"sent": result["sent"]},
+            message="OTP sent to email",
+            request_id=http_request.state.request_id,
+        )
+    except Exception as e:
+        print(f"DEBUG: auth.py - Caught exception: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 
 @router.post("/login/verify-email-otp")

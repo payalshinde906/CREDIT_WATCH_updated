@@ -174,6 +174,12 @@ export const purchaseOrders = {
   archive: (id) => apiRequest(`/purchase-orders/${id}/archive`, { method: 'POST' }),
   markPaid: (id) => apiRequest(`/purchase-orders/${id}/mark-paid`, { method: 'POST' }),
   sendReminder: (id) => apiRequest(`/purchase-orders/${id}/send-reminder`, { method: 'POST' }),
+  sendLegalNotice: (id, data) => apiRequest(`/purchase-orders/${id}/send-legal-notice`, { method: 'POST', body: JSON.stringify(data) }),
+}
+
+export const admin = {
+  getSettings: () => apiRequest('/user/admin/settings'),
+  updateSettings: (data) => apiRequest('/user/admin/settings', { method: 'POST', body: JSON.stringify(data) }),
 }
 
 // Manual reminder for PO (additive standalone function)

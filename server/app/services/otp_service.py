@@ -210,9 +210,12 @@ class OTPService:
 
     @classmethod
     async def send_otp_for_login_email(cls, email: str) -> dict:
+        print(f"DEBUG: Starting send_otp_for_login_email for {email}")
         otp = cls._generate_otp()
+        print(f"DEBUG: Generated OTP: {otp}")
         expiry_seconds = settings.OTP_EXPIRY_MINUTES * 60
         key = f"{cls.LOGIN_EMAIL_PREFIX}{email.lower()}"
+        print(f"DEBUG: Storing OTP in Redis/Memory with key: {key}")
         await _store_otp(key, otp, expiry_seconds)
         logger.info(f"Login email OTP generated for {email}")
         try:
@@ -221,8 +224,13 @@ class OTPService:
                 f"Your login OTP is: {otp}\n\n"
                 f"This code will expire in {settings.OTP_EXPIRY_MINUTES} minutes."
             )
+            print(f"DEBUG: Attempting to send email via EmailService().send_email to {email}")
             EmailService().send_email(email, subject, body)
+            print(f"DEBUG: Email sent successfully")
         except Exception as e:
+            print(f"DEBUG: Caught exception in send_otp_for_login_email: {str(e)}")
+            import traceback
+            traceback.print_exc()
             logger.error("Failed to send login email OTP to %s: %s", email, e)
             raise HTTPException(status_code=500, detail="Failed to send OTP email. Please try again.")
         return {"sent": True}

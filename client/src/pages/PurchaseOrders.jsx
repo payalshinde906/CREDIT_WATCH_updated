@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { purchaseOrders, sendPOReminder } from '../services/api/apiClient'
+import { purchaseOrders, sendPOReminder, admin } from '../services/api/apiClient'
 import { isValidGstin } from '../utils/validation'
 import { useAuth } from '../state/authContext'
 import EditPOModal from '../components/po/EditPOModal'
@@ -15,7 +15,7 @@ export default function PurchaseOrders() {
   const [loading, setLoading] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
   const [loadingId, setLoadingId] = useState(null)
-  const [form, setForm] = useState({ po_number: '', vendor: '', gstin: '', vendor_email: '', vendor_phone: '', amount: '', due_date: '', status: 'open', document_url: '' })
+  const [form, setForm] = useState({ po_number: '', vendor: '', gstin: '', vendor_email: '', vendor_phone: '', amount: '', due_date: '', status: 'open', document_url: '', payment_window_days: 50 })
   const [statusMessage, setStatusMessage] = useState('')
   const [cred, setCred] = useState(null)
   const [statusFilter, setStatusFilter] = useState('')
@@ -31,8 +31,11 @@ export default function PurchaseOrders() {
     const [reminderPO, setReminderPO] = useState(null)
     const [showArchived, setShowArchived] = useState(false)
     const [deleteConfirm, setDeleteConfirm] = useState(null)
-    const [showCSVImport, setShowCSVImport] = useState(false)
-    const [currentPage, setCurrentPage] = useState(1)
+  const [showCSVImport, setShowCSVImport] = useState(false)
+  const [showLegalNotice, setShowLegalNotice] = useState(false);
+  const [editingRow, setEditingRow] = useState(null);
+  const [editValue, setEditValue] = useState('');
+  const [currentPage, setCurrentPage] = useState(1)
     const rowsPerPage = 5
 
   const activeRows = useMemo(() => rows.filter(r => !r.is_archived), [rows])
@@ -49,6 +52,30 @@ export default function PurchaseOrders() {
       currentPage * rowsPerPage
     )
   }, [displayRows, currentPage, rowsPerPage])
+
+  const getDaysLeftBadge = (row) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDate = row.due_date ? new Date(row.due_date) : null;
+    if (!dueDate) return <span className="text-gray-400">—</span>;
+
+    const isPaid = row.payment_completed_at || String(row.status || '').toLowerCase() === 'closed' || String(row.status || '').toLowerCase() === 'paid';
+    if (isPaid) return <span className="text-gray-400">—</span>;
+
+    const diffTime = dueDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays > row.payment_window_days) {
+      return <span className="text-emerald-600 font-medium">{diffDays} days left</span>;
+    }
+    if (diffDays >= 1) {
+      return <span className="text-amber-600 font-medium">{diffDays} days left ⚠️</span>;
+    }
+    if (diffDays === 0) {
+      return <span className="text-red-600 font-bold">Due Today!</span>;
+    }
+    return <span className="text-red-600 font-bold">{Math.abs(diffDays)} days overdue</span>;
+  };
 
   const getStatusBadge = (row) => {
     const statusLower = String(row.status || '').toLowerCase()
@@ -173,6 +200,7 @@ export default function PurchaseOrders() {
       due_date: form.due_date,
       status: form.status,
       document_url: form.document_url || '',
+      payment_window_days: form.payment_window_days,
     }
 
     setIsLoading(true)
@@ -198,7 +226,7 @@ export default function PurchaseOrders() {
       setRows(resList.data)
     }
     setLoading(false)
-    setForm({ po_number: '', vendor: '', gstin: '', vendor_email: '', vendor_phone: '', amount: '', due_date: '', status: 'open', document_url: '' })
+    setForm({ po_number: '', vendor: '', gstin: '', vendor_email: '', vendor_phone: '', amount: '', due_date: '', status: 'open', document_url: '', payment_window_days: 50 })
     setStatusMessage('PO saved to backend successfully.')
     window.dispatchEvent(new Event('poChanged'))
   }
@@ -208,9 +236,15 @@ export default function PurchaseOrders() {
     }
 
     const handleSaveEdit = async (payload) => {
-      const res = await purchaseOrders.update(editingPO.id, payload)
+      const targetId = editingPO ? editingPO.id : editingRow;
+      if (!targetId) return false;
+
+      // Optimistic update
+      setRows((prev) => prev.map(r => r.id === targetId ? { ...r, ...payload } : r));
+
+      const res = await purchaseOrders.update(targetId, payload)
       if (res.ok) {
-        // Refresh list after edit
+        // Refresh list from backend to ensure consistency
         const resList = await purchaseOrders.list(1, 100, true)
         if (resList.ok && Array.isArray(resList.data?.items)) {
           setRows(resList.data.items)
@@ -219,9 +253,20 @@ export default function PurchaseOrders() {
         }
         setStatusMessage('PO updated successfully.')
         window.dispatchEvent(new Event('poChanged'))
+        setEditingRow(null)
+        setEditingPO(null)
         return true
+      } else {
+        setStatusMessage(res.error || 'Failed to update PO')
+        // Revert optimistic update by refreshing from backend
+        const resList = await purchaseOrders.list(1, 100, true)
+        if (resList.ok && Array.isArray(resList.data?.items)) {
+          setRows(resList.data.items)
+        } else if (resList.ok && Array.isArray(resList.data)) {
+          setRows(resList.data)
+        }
+        return false
       }
-      return false
     }
 
     const handleDelete = (po) => {
@@ -253,13 +298,7 @@ export default function PurchaseOrders() {
     }
   
     const handleSendReminder = (po) => {
-      setStatusMessage('')
-      const email = (po.vendor_email || '').trim()
-      if (!email) {
-        setStatusMessage('No vendor email set for this PO. Please edit the PO to add vendor contact details.')
-        return
-      }
-      setReminderPO(po)
+      setReminderPO(po);
     }
 
     const handleConfirmReminder = async (payload) => {
@@ -269,7 +308,16 @@ export default function PurchaseOrders() {
           const dt = new Date(payload.scheduled_at).toLocaleString()
           setStatusMessage(`Reminder scheduled for ${dt}`)
         } else {
-          setStatusMessage('Reminder sent to vendor')
+          setStatusMessage(payload.include_legal_notice ? 'Reminder with Legal Notice sent to vendor' : 'Reminder sent to vendor')
+          // Refresh the list to show the badge if legal notice was sent
+          if (payload.include_legal_notice) {
+            const resList = await purchaseOrders.list(1, 100, true);
+            if (resList.ok && Array.isArray(resList.data?.items)) {
+              setRows(resList.data.items);
+            } else if (resList.ok && Array.isArray(resList.data)) {
+              setRows(resList.data);
+            }
+          }
         }
         return true
       } else {
@@ -277,6 +325,7 @@ export default function PurchaseOrders() {
         return false
       }
     }
+
   
     const handleMarkPaid = async (po) => {
       setLoadingId(po.id)
@@ -458,6 +507,8 @@ export default function PurchaseOrders() {
                     <th className="py-5 px-6 text-left text-xs font-bold text-gray-800 uppercase tracking-widest border-b border-gray-200">GSTIN</th>
                     <th className="py-5 px-6 text-right text-xs font-bold text-gray-800 uppercase tracking-widest border-b border-gray-200">Amount</th>
                     <th className="py-5 px-6 text-left text-xs font-bold text-gray-800 uppercase tracking-widest border-b border-gray-200">Due</th>
+                    <th className="py-5 px-6 text-left text-xs font-bold text-gray-800 uppercase tracking-widest border-b border-gray-200">Days Left</th>
+                    <th className="py-5 px-6 text-left text-xs font-bold text-gray-800 uppercase tracking-widest border-b border-gray-200">Payment Window</th>
                     <th className="py-5 px-6 text-left text-xs font-bold text-gray-800 uppercase tracking-widest border-b border-gray-200">Status</th>
                     <th className="py-5 px-6 text-right text-xs font-bold text-gray-800 uppercase tracking-widest border-b border-gray-200">Actions</th>
                   </tr>
@@ -465,7 +516,7 @@ export default function PurchaseOrders() {
                 <tbody className="bg-white divide-y divide-gray-100">
                   {loading && (
                     <tr>
-                      <td colSpan={9} className="py-12 text-center text-gray-500">
+                      <td colSpan={11} className="py-12 text-center text-gray-500">
                         <div className="flex flex-col items-center gap-2">
                           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-100 border-t-primary-600" />
                           <p className="text-sm font-medium">Loading orders...</p>
@@ -475,7 +526,7 @@ export default function PurchaseOrders() {
                   )}
                   {!loading && displayRows.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="py-12 text-center text-gray-500">
+                      <td colSpan={11} className="py-12 text-center text-gray-500">
                         <div className="flex flex-col items-center gap-1">
                           <span className="text-2xl">📋</span>
                           <p className="text-sm font-medium">{showArchived ? 'No purchase orders yet.' : 'No active purchase orders.'}</p>
@@ -494,6 +545,7 @@ export default function PurchaseOrders() {
                       >
                         <td className="py-5 px-6 whitespace-nowrap">
                           <span className="font-bold text-gray-900">{row.po_number}</span>
+                          {row.legal_notice_sent_at && <span className="ml-2">⚖️</span>}
                         </td>
                         <td className="py-5 px-6">
                           <div className="text-sm font-medium text-gray-900">{row.vendor}</div>
@@ -512,6 +564,51 @@ export default function PurchaseOrders() {
                         </td>
                         <td className="py-5 px-6 whitespace-nowrap">
                           <span className="text-sm text-gray-600 font-medium">{row.due_date?.slice(0, 10) || row.due_date}</span>
+                        </td>
+                        <td className="py-5 px-6 whitespace-nowrap">
+                          {getDaysLeftBadge(row)}
+                        </td>
+                        <td className="py-5 px-6 whitespace-nowrap">
+                          {editingRow === row.id ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                className="w-20 p-1 border rounded focus:ring-2 focus:ring-primary-200 outline-none"
+                                autoFocus
+                              />
+                              <button
+                                onClick={() => {
+                                  handleSaveEdit({ payment_window_days: Number(editValue) });
+                                }}
+                                className="text-emerald-600 hover:text-emerald-700 font-bold p-1"
+                                title="Save"
+                              >
+                                ✅
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingRow(null);
+                                  setEditValue('');
+                                }}
+                                className="text-red-600 hover:text-red-700 font-bold p-1"
+                                title="Cancel"
+                              >
+                                ❌
+                              </button>
+                            </div>
+                          ) : (
+                            <span
+                              className="text-sm text-gray-600 font-medium cursor-pointer group-hover:text-primary-600 flex items-center gap-1"
+                              onClick={() => {
+                                setEditingRow(row.id);
+                                setEditValue(row.payment_window_days || 0);
+                              }}
+                            >
+                              {row.payment_window_days} days <span className="text-xs opacity-0 group-hover:opacity-100 transition-opacity">✏️</span>
+                            </span>
+                          )}
                         </td>
                         <td className="py-5 px-6 whitespace-nowrap">
                           {getStatusBadge(row)}
@@ -680,6 +777,17 @@ export default function PurchaseOrders() {
                   required
                 />
               </div>
+              <div className="flex gap-3">
+                <input
+                  className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
+                  name="payment_window_days"
+                  type="number"
+                  value={form.payment_window_days || ''}
+                  onChange={handleChange}
+                  placeholder="Payment Window (days)"
+                  required
+                />
+              </div>
               <select
                 name="status"
                 value={form.status || 'Open'}
@@ -710,6 +818,44 @@ export default function PurchaseOrders() {
               onClose={() => setEditingPO(null)}
               onSave={handleSaveEdit}
             />
+          )}
+
+          {showLegalNotice && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6">
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Legal Notice</h3>
+                <textarea
+                  className="w-full h-64 rounded-lg border border-gray-300 px-4 py-3 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 font-mono text-sm bg-gray-50"
+                  defaultValue={`LEGAL NOTICE\n\nTo: ${form.vendor || ''}\nRE: Outstanding Payment - PO ${form.po_number || ''}\n\nDear ${form.vendor || ''},\n\nThis is a formal legal notice that payment of ₹${form.amount || ''} for Purchase Order ${form.po_number || ''} due on ${form.due_date || ''} remains unpaid/pending.\n\nYou are required to clear this payment within 7 days of receiving this notice, failing which legal proceedings will be initiated without further notice.\n\nIssued by: ${user?.company_name || ''}\nDate: ${new Date().toLocaleDateString()}`}
+                />
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={() => {
+                      const ta = document.querySelector('textarea');
+                      if (ta) navigator.clipboard.writeText(ta.value);
+                    }}
+                    className="btn-secondary"
+                  >
+                    📋 Copy Notice
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowLegalNotice(false);
+                      setStatusMessage('Save this PO first to send it via email.');
+                    }}
+                    className="btn-primary"
+                  >
+                    📧 Send via Email
+                  </button>
+                  <button
+                    onClick={() => setShowLegalNotice(false)}
+                    className="flex-1 px-6 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    ❌ Close
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
 
           {reminderPO && (

@@ -17,8 +17,10 @@ from app.exceptions import UnauthorizedFeature
 from app.utils.phone import is_valid_phone
 import uuid
 from sqlalchemy import or_
-from app.services.email_service import EmailService
+from app.services.email_service import EmailService, send_email_with_attachment
+from app.services.legal_notice_service import generate_legal_notice_pdf
 from app.models import Notification
+import os
 
 async def sync_vendor_credibility(vendor_name: str, db): 
     try: 
@@ -100,6 +102,42 @@ INVALID_PAN_FORMAT = "Invalid PAN format"
 
 # User routes
 user_router = APIRouter()
+
+@user_router.get("/admin/settings")
+async def get_admin_settings(db: AsyncSession = Depends(get_db)):
+    """Get application settings"""
+    from app.models import AppSettings
+    stmt = select(AppSettings).where(AppSettings.id == 'default')
+    result = await db.execute(stmt)
+    settings = result.scalars().first()
+    if not settings:
+        return ResponseFormatter.create_success(data={"payment_window_days": 50})
+    return ResponseFormatter.create_success(data={"payment_window_days": settings.payment_window_days})
+
+@user_router.post("/admin/settings")
+async def update_admin_settings(req: dict, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Update application settings (MASTER_ADMIN only)"""
+    if current_user.role != "MASTER_ADMIN":
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    payment_window_days = req.get("payment_window_days")
+    if payment_window_days is None:
+        raise HTTPException(status_code=400, detail="payment_window_days is required")
+        
+    from app.models import AppSettings
+    stmt = select(AppSettings).where(AppSettings.id == 'default')
+    result = await db.execute(stmt)
+    settings = result.scalars().first()
+    
+    if not settings:
+        settings = AppSettings(id='default', payment_window_days=payment_window_days)
+        db.add(settings)
+    else:
+        settings.payment_window_days = payment_window_days
+        settings.updated_at = datetime.utcnow()
+        
+    await db.commit()
+    return ResponseFormatter.create_success(message="Settings updated successfully")
 
 @user_router.get("/profile")
 async def get_profile(current_user: User = Depends(get_current_user)):
@@ -347,6 +385,7 @@ async def create_po(req: dict, request: Request, current_user: User = Depends(ge
         supplier_address=req.get("supplier_address"),
         delivery_address=req.get("delivery_address"),
         invoice_address=req.get("invoice_address"),
+        payment_window_days=req.get("payment_window_days", 50),
     )
     try:
         db.add(po)
@@ -515,6 +554,8 @@ async def list_pos(
             "status": p.status,
             "archived": p.archived,
             "payment_completed_at": p.payment_completed_at.isoformat() if p.payment_completed_at else None,
+            "payment_window_days": getattr(p, "payment_window_days", 50),
+            "legal_notice_sent_at": p.legal_notice_sent_at.isoformat() if p.legal_notice_sent_at else None,
             "document_url": p.document_url,
             "notes": p.notes,
             "supplier_address": p.supplier_address,
@@ -546,6 +587,8 @@ async def list_pos(
                 "status": p.status,
                 "archived": getattr(p, "archived", False),
                 "payment_completed_at": p.payment_completed_at.isoformat() if p.payment_completed_at else None,
+                "payment_window_days": getattr(p, "payment_window_days", 50),
+                "legal_notice_sent_at": p.legal_notice_sent_at.isoformat() if p.legal_notice_sent_at else None,
                 "document_url": p.document_url,
                 "notes": p.notes,
                 "supplier_address": p.supplier_address,
@@ -678,6 +721,8 @@ async def update_po(po_id: str, req: dict, current_user: User = Depends(get_curr
         po.delivery_address = req["delivery_address"]
     if "invoice_address" in req:
         po.invoice_address = req["invoice_address"]
+    if "payment_window_days" in req:
+        po.payment_window_days = req["payment_window_days"]
     
     po.updated_at = datetime.utcnow()
     await db.commit()
@@ -869,6 +914,8 @@ async def send_vendor_reminder(po_id: str, req: dict = None, current_user: User 
     subject = (req or {}).get("subject")
     body = (req or {}).get("body")
     scheduled_at = (req or {}).get("scheduled_at")
+    include_legal_notice = (req or {}).get("include_legal_notice", False)
+    legal_notice_content = (req or {}).get("legal_notice_content", "")
 
     if not subject or not body:
         # Compose email from template if not provided in request
@@ -899,6 +946,11 @@ async def send_vendor_reminder(po_id: str, req: dict = None, current_user: User 
                 f"is due on {due_date_str}. Please arrange payment at the earliest.\n\n"
                 f"Regards,\n{owner.company_name or 'Your Customer'}"
             ))
+
+    # Append legal notice if requested
+    if include_legal_notice and legal_notice_content:
+        # The legal notice is sent as a PDF, so we don't append it to the body here.
+        pass
 
     if scheduled_at:
         try:
@@ -931,9 +983,38 @@ async def send_vendor_reminder(po_id: str, req: dict = None, current_user: User 
 
     # Send email NOW
     try:
-        EmailService().send_email(v_email, subject, body)
-    except Exception:
-        raise HTTPException(status_code=500, detail="Failed to send reminder email")
+        if include_legal_notice:
+            # Generate PDF
+            pdf_path = f"uploads/temp/legal_notice_{po_id}.pdf"
+            po_data = {
+                "vendor": po.vendor,
+                "po_number": po.po_number,
+                "amount": po.amount,
+                "due_date": str(po.due_date),
+                "company_name": owner.company_name or "Company"
+            }
+            generate_legal_notice_pdf(po_data, pdf_path, legal_notice_content)
+            
+            # Send with attachment
+            await send_email_with_attachment(
+                to_email=v_email,
+                subject=subject,
+                body=body,
+                attachment_path=pdf_path,
+                attachment_name=f"Legal_Notice_{po.po_number}.pdf"
+            )
+            
+            # Cleanup
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)
+                
+            po.legal_notice_sent_at = datetime.utcnow()
+            await db.commit()
+        else:
+            EmailService().send_email(v_email, subject, body)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to send reminder email: {str(e)}")
 
     # Optional: emit notification record
     try:
@@ -949,6 +1030,69 @@ async def send_vendor_reminder(po_id: str, req: dict = None, current_user: User 
     except Exception:
         pass
     return ResponseFormatter.create_success(message="Reminder sent successfully")
+
+@po_router.post("/{po_id}/send-legal-notice")
+async def send_legal_notice(po_id: str, request: Request, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    body = await request.json()
+    include_legal = body.get("include_legal_notice", False)
+    custom_text = body.get("legal_notice_content", None)
+
+    # Fetch PO from DB
+    stmt = select(PurchaseOrder).where((PurchaseOrder.id == po_id) & (PurchaseOrder.user_id == current_user.id))
+    result = await db.execute(stmt)
+    po = result.scalars().first()
+    if not po:
+        raise HTTPException(status_code=404, detail=PO_NOT_FOUND_ERROR)
+
+    # Clean email body - NO legal notice text here
+    email_body = f"""Dear {po.vendor},
+
+This is a reminder that PO {po.po_number} for the amount of Rs.{po.amount} is due on {po.due_date}.
+
+Please ensure payment is processed on time.
+
+Regards,
+Team CreditWatch"""
+
+    if include_legal:
+        print(f"[DEBUG] include_legal_notice: {include_legal}")
+        print(f"[DEBUG] vendor_email: {po.vendor_email}")
+        # Generate PDF
+        pdf_path = f"uploads/temp/legal_notice_{po_id}.pdf"
+        print(f"[DEBUG] Generating PDF at: {pdf_path}")
+        po_data = {
+            "vendor": po.vendor,
+            "po_number": po.po_number,
+            "amount": po.amount,
+            "due_date": str(po.due_date),
+            "company_name": current_user.company_name or "Company"
+        }
+        generate_legal_notice_pdf(po_data, pdf_path, custom_text)
+        print(f"[DEBUG] PDF generated. File exists: {os.path.exists(pdf_path)}")
+
+        # Send with PDF attachment
+        await send_email_with_attachment(
+            to_email=po.vendor_email,
+            subject=f"Payment Reminder - PO {po.po_number}",
+            body=email_body,
+            attachment_path=pdf_path,
+            attachment_name=f"Legal_Notice_{po.po_number}.pdf"
+        )
+        print(f"[DEBUG] Email sent with attachment")
+
+        # Delete temp PDF
+        if os.path.exists(pdf_path):
+            os.remove(pdf_path)
+
+        # Update DB
+        po.legal_notice_sent_at = datetime.utcnow()
+        await db.commit()
+
+        return {"message": f"Email with legal notice PDF sent to {po.vendor_email}"}
+    else:
+        # Send normal reminder without attachment
+        await EmailService().send_email(po.vendor_email, f"Payment Reminder - PO {po.po_number}", email_body)
+        return {"message": f"Reminder sent to {po.vendor_email}"}
 # Defaulter routes
 defaulter_router = APIRouter()
 
