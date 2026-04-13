@@ -310,3 +310,91 @@
 - Fixed PO creation 400 (missing `payment_window_days`)
 - Verified all DB columns exist after clone
 - OTP email fixed with correct SSL settings
+
+
+CHANGELOG — CreditDataWatch
+Version 2.3 — April 11, 2026
+
+🔐 Security & Authentication
+
+Blocked duplicate GSTIN registration — shows "Already registered, contact your admin"
+Deleted duplicate test account (shindepayal296@gmail.com)
+Added developer bypass — payalshinde906@gmail.com always has full access
+Added company_domain and allow_any_domain columns to companies table
+Domain-specific invite check added (optional enforcement)
+subscription_status now included in login API response
+
+📋 Audit Log System
+
+Created po_audit_logs table in database
+Every PO delete and update now records: who did it, when, and why
+Reason field added to delete/update actions
+New /audit-logs page — visible only to MASTER_ADMIN
+Filters by action type, date, user, PO number
+
+🌐 Credibility Index Page
+
+Renamed "Platform Reputation (Global CBI)" → "Network Trust Intelligence"
+Removed "View Profile" button from the table
+Added AI Risk Assessment column with color-coded verdicts: Low Risk / Moderate Risk / High Risk
+Half-star rating display added (like Flipkart)
+
+📊 Credibility Detail Page
+
+Renamed "Global CBI Ratings" tab → "Business Rating"
+Removed partner review list and rating form from that tab
+New star display with half-star support
+AI recommendation card: Safe to do business / Moderate Risk / High Risk / Not Rated
+
+👥 Team Management
+
+Fixed 500 Internal Server Error on invite creation
+Invitation success message now shows "✅ Invitation sent successfully!" instead of raw token
+Fixed invitation email link pointing to wrong port (3000 → 3001)
+
+🌍 IIS Deployment
+
+Created web.config in client/dist for React route handling
+Fixed IIS permissions for anonymous access
+API proxy rule added in web.config
+
+🗄️ Database
+
+Redundancy check performed — no duplicate PO numbers or users found
+po_audit_logs table created
+company_domain and allow_any_domain columns added to companies table
+
+---
+
+## v2.4 — April 13, 2026
+
+### Complete Audit Log System & Stability Fixes
+
+#### Audit Log System (Full Integration)
+- **Database**: Created `audit_logs` table with fields for `user_id`, `action`, `po_number`, `vendor_name`, `reason`, `old_data`, and `new_data`.
+- **Backend**: Integrated `log_audit` helper into all PO life-cycle events: `CREATE`, `UPDATE`, `DELETE`, `MARK_PAID`, and `ARCHIVE`.
+- **Reason Tracking**: Every critical PO modification (Delete, Update, Archive, etc.) now requires a user-provided reason, captured in the audit trail.
+- **Admin View**: Refactored `/audit-logs` page with:
+    - Real-time stats cards for each action type.
+    - Advanced filtering (Search by PO/Vendor/User, Filter by Action, Date range).
+    - Action-specific color coding (e.g., Green for CREATE, Red for DELETE).
+    - Access restricted to `MASTER_ADMIN`, `COMPANY_ADMIN`, and `ADMIN` roles.
+
+#### Authentication & Stability
+- **Login Freeze Fix**: Identified and fixed a blocking startup event where Ollama model checks were hanging the server. Moved AI checks to a background thread.
+- **Request Reliability**: Added a global 30s timeout and specific 10s timeouts for auth/profile requests in `apiClient.js` to prevent UI freezing.
+- **Token Handling**: Improved token storage in `localStorage` (`access_token` and `token` keys) for better compatibility with legacy components.
+- **Auto-Logout/Redirect**: Frontend now automatically redirects to login on 401 Unauthorized errors if token refresh fails.
+- **AbortError Fix**: Resolved "signal is aborted" errors by ensuring `AbortController` is only used when no external signal is provided.
+
+#### AI & Chatbot Enhancements
+- **Chatbot Timeout**: Increased chatbot and AI analysis timeouts from 30s to 60s to accommodate slower AI model response times.
+- **Backend Resiliency**: Increased backend HTTP client timeouts for Ollama connections to 60s.
+- **Search Fix**: Resolved a 500 Internal Server Error in Audit Logs search by correctly handling date-to-timestamp conversions in the backend.
+
+#### UI/UX Polishing
+- **Header**: Removed the lock emoji from the "Audit Logs" link for a cleaner look.
+- **Modals**: Implemented a reusable `ReasonModal` for all destructive/critical actions in the Purchase Orders management page.
+
+**Files touched:** `main.py`, `core.py`, `chat.py`, `apiClient.js`, `authService.js`, `AuditLogs.jsx`, `PurchaseOrders.jsx`, `EditPOModal.jsx`, `Header.jsx`, `ai_cbi_service.py`
+

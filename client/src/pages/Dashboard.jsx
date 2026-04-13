@@ -94,15 +94,17 @@ export default function Dashboard() {
   const fetchDashboardData = async () => {
     setLoadingData(true)
     try {
+      // Use shorter timeouts for dashboard summary stats
+      const opt = { timeout: 8000 }
       const [posRes, invoicesRes, defaultersRes, reportsRes, settlementsRes, appointmentsRes, remindersRes, walletRes] = await Promise.all([
-        purchaseOrders.list(1, 10, false),
-        invoices.list({ limit: 10 }),
-        defaulters.list(1, 10),
-        creditReports.list(1, 10),
-        settlements.list(1, 10),
-        appointments.list(),
-        invoices.getDueReminders(),
-        wallet.getBalance(),
+        purchaseOrders.list(1, 10, false, opt),
+        invoices.list({ limit: 10 }, opt),
+        defaulters.list(1, 10, opt),
+        creditReports.list(1, 10, opt),
+        settlements.list(1, 10, opt),
+        appointments.list(null, opt),
+        invoices.getDueReminders(opt),
+        wallet.getBalance(opt),
       ])
 
       // Set stats
@@ -273,60 +275,60 @@ export default function Dashboard() {
         </div>
 
         <div className="flex flex-wrap gap-4">
-          <div className="flex items-center gap-4 px-5 py-3 rounded-xl border-2 border-blue-500 shadow-sm bg-white hover:shadow-md transition-shadow">
+          <Link to="/purchase-orders" className="flex items-center gap-4 px-5 py-3 rounded-xl border-2 border-blue-500 shadow-sm bg-white hover:shadow-md transition-all group">
             <div className="flex flex-col">
               <p className="text-xs text-gray-500">Purchase Orders</p>
-              <Link to="/purchase-orders" className="text-xs text-blue-600 hover:underline inline-block">
+              <span className="text-xs text-blue-600 group-hover:underline inline-block">
                 View all →
-              </Link>
+              </span>
             </div>
             <p className="text-2xl font-bold text-blue-600">{stats.purchaseOrders}</p>
-          </div>
-          <div className="flex items-center gap-4 px-5 py-3 rounded-xl border border-gray-100 shadow-sm border-l-4 border-green-500 bg-white hover:shadow-md transition-shadow">
+          </Link>
+          <Link to="/invoices" className="flex items-center gap-4 px-5 py-3 rounded-xl border border-gray-100 shadow-sm border-l-4 border-green-500 bg-white hover:shadow-md transition-all group">
             <div className="flex flex-col">
               <p className="text-xs text-gray-500">Invoices</p>
-              <Link to="/invoices" className="text-xs text-green-600 hover:underline inline-block">
+              <span className="text-xs text-green-600 group-hover:underline inline-block">
                 View all →
-              </Link>
+              </span>
             </div>
             <p className="text-2xl font-bold text-green-600">{stats.invoices}</p>
-          </div>
-          <div className="flex items-center gap-4 px-5 py-3 rounded-xl border border-gray-100 shadow-sm border-l-4 border-red-500 bg-white hover:shadow-md transition-shadow">
+          </Link>
+          <Link to="/defaulters" className="flex items-center gap-4 px-5 py-3 rounded-xl border border-gray-100 shadow-sm border-l-4 border-red-500 bg-white hover:shadow-md transition-all group">
             <div className="flex flex-col">
               <p className="text-xs text-gray-500">Defaulters</p>
-              <Link to="/defaulters" className="text-xs text-red-600 hover:underline inline-block">
+              <span className="text-xs text-red-600 group-hover:underline inline-block">
                 View all →
-              </Link>
+              </span>
             </div>
             <p className="text-2xl font-bold text-red-600">{stats.defaulters}</p>
-          </div>
-          <div className="flex items-center gap-4 px-5 py-3 rounded-xl border border-gray-100 shadow-sm border-l-4 border-purple-500 bg-white hover:shadow-md transition-shadow">
+          </Link>
+          <Link to="/credit-reports" className="flex items-center gap-4 px-5 py-3 rounded-xl border border-gray-100 shadow-sm border-l-4 border-purple-500 bg-white hover:shadow-md transition-all group">
             <div className="flex flex-col">
               <p className="text-xs text-gray-500">Credit Reports</p>
-              <Link to="/credit-reports" className="text-xs text-purple-600 hover:underline inline-block">
+              <span className="text-xs text-purple-600 group-hover:underline inline-block">
                 View all →
-              </Link>
+              </span>
             </div>
             <p className="text-2xl font-bold text-purple-600">{stats.creditReports}</p>
-          </div>
-          <div className="flex items-center gap-4 px-5 py-3 rounded-xl border border-gray-100 shadow-sm border-l-4 border-teal-500 bg-white hover:shadow-md transition-shadow">
+          </Link>
+          <Link to="/settlement" className="flex items-center gap-4 px-5 py-3 rounded-xl border border-gray-100 shadow-sm border-l-4 border-teal-500 bg-white hover:shadow-md transition-all group">
             <div className="flex flex-col">
               <p className="text-xs text-gray-500">Settlements</p>
-              <Link to="/settlement" className="text-xs text-teal-600 hover:underline inline-block">
+              <span className="text-xs text-teal-600 group-hover:underline inline-block">
                 View all →
-              </Link>
+              </span>
             </div>
             <p className="text-2xl font-bold text-teal-600">{stats.settlements}</p>
-          </div>
-          <div className="flex items-center gap-4 px-5 py-3 rounded-xl border border-gray-100 shadow-sm border-l-4 border-orange-500 bg-white hover:shadow-md transition-shadow">
+          </Link>
+          <Link to="/appointment" className="flex items-center gap-4 px-5 py-3 rounded-xl border border-gray-100 shadow-sm border-l-4 border-orange-500 bg-white hover:shadow-md transition-all group">
             <div className="flex flex-col">
               <p className="text-xs text-gray-500">Appointments</p>
-              <Link to="/appointment" className="text-xs text-orange-600 hover:underline inline-block">
+              <span className="text-xs text-orange-600 group-hover:underline inline-block">
                 View all →
-              </Link>
+              </span>
             </div>
             <p className="text-2xl font-bold text-orange-600">{stats.appointments}</p>
-          </div>
+          </Link>
         </div>
 
         {/* Quick Actions */}

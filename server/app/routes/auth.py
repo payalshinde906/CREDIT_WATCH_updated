@@ -56,7 +56,29 @@ async def register(
         phone_e164 = format_phone_e164(request.phone)
         await OTPService.verify_otp(phone_e164, request.otp_code)
 
+    # Block duplicate GSTIN 
+    existing_gstin = await db.execute( 
+        select(User).where(User.gstin == request.gstin.upper()) 
+    ) 
+    if existing_gstin.scalar_one_or_none(): 
+        raise HTTPException( 
+            status_code=400, 
+            detail="This GSTIN is already registered. Please ask your company admin to invite you instead." 
+        ) 
+
     result = await AuthService.register(request, db)
+
+    # Extract company domain from email
+    email_domain = request.email.split('@')[1] if '@' in request.email else ''
+    
+    # Update company_domain in companies table
+    from app.models import Company
+    stmt = select(Company).where(Company.id == result["user"]["company_id"])
+    c_res = await db.execute(stmt)
+    company = c_res.scalars().first()
+    if company:
+        company.company_domain = email_domain
+        await db.commit()
 
     await EmailService.send_registration_email(
         request.email, request.company_name, request.phone
@@ -105,8 +127,13 @@ async def login(
     result = await AuthService.login(request, db)
 
     request_id = getattr(getattr(http_request, "state", None), "request_id", "") if http_request else ""
+    
+    # Include access_token in the response data for non-cookie clients (like Flutter)
+    user_data = result["user"]
+    user_data["access_token"] = result["tokens"]["access_token"]
+    
     response_data = ResponseFormatter.create_success(
-        data=result["user"],
+        data=user_data,
         message="Login successful",
         request_id=request_id,
     )
@@ -167,8 +194,13 @@ async def login_verify_email_otp(
 ):
     result = await AuthService.login_with_email_otp(request.email, request.gstin, request.otp_code, db)
     request_id = getattr(getattr(http_request, "state", None), "request_id", "") if http_request else ""
+    
+    # Include access_token in the response data for non-cookie clients (like Flutter)
+    user_data = result["user"]
+    user_data["access_token"] = result["tokens"]["access_token"]
+    
     response_data = ResponseFormatter.create_success(
-        data=result["user"],
+        data=user_data,
         message="Login successful",
         request_id=request_id,
     )

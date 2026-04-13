@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAuth } from '../state/authContext'
-import { credibility, sendChatMessage } from '../services/api/apiClient'
+import { credibility, sendChatMessage, ratings } from '../services/api/apiClient'
 
 const GRADE_COLOR = {
   A: 'bg-green-100 text-green-700',
@@ -17,12 +17,13 @@ const RISK_COLOR = {
   High: 'bg-red-100 text-red-700',
 }
 
-function StarRating({ stars }) {
+function StarRating({ stars, onRate = null, size = "text-xl" }) {
   return (
     <div className="flex gap-1">
-      {[1,2,3,4,5].map(i => (
+      {[1, 2, 3, 4, 5].map(i => (
         <span key={i}
-          className={`text-xl ${
+          onClick={() => onRate && onRate(i)}
+          className={`${size} ${onRate ? 'cursor-pointer hover:scale-110 transition-transform' : ''} ${
             i <= stars
               ? 'text-yellow-400'
               : 'text-gray-200'
@@ -96,6 +97,13 @@ CredibilityDetail() {
     useState(null)
   const [loadingRec, setLoadingRec] =
     useState(false)
+  const [manualRatings, setManualRatings] = useState([])
+  const [canRate, setCanRate] = useState(false)
+  const [userRating, setUserRating] = useState(0)
+  const [userReview, setUserReview] = useState('')
+  const [submittingRating, setSubmittingRating] = useState(false)
+  const [aiCbiAnalysis, setAiCbiAnalysis] = useState(null)
+  const [loadingAiCbi, setLoadingAiCbi] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -103,13 +111,57 @@ CredibilityDetail() {
         const res = await credibility.get(companyId)
         if (res.ok) {
           setData(res.data || null)
+          
+          // Check if allowed to rate
+          const checkRes = await ratings.check(res.data.gstin)
+          if (checkRes.ok && checkRes.data.allowed) {
+            setCanRate(true)
+          }
         }
+        
+        // Load manual ratings
+        const ratingsRes = await ratings.listForCompany(companyId)
+        if (ratingsRes.ok) {
+          setManualRatings(ratingsRes.data)
+        }
+
+        // Load AI CBI analysis
+        setLoadingAiCbi(true)
+        const aiCbiRes = await ratings.getAiAnalysis(companyId)
+        if (aiCbiRes.ok) {
+          setAiCbiAnalysis(aiCbiRes.data.analysis)
+        }
+        setLoadingAiCbi(false)
       } catch (err) {
         console.error('Load error:', err)
       }
     }
     load()
   }, [companyId])
+
+  const handleRatingSubmit = async () => {
+    if (userRating === 0) return
+    setSubmittingRating(true)
+    try {
+      const res = await ratings.submit({
+        to_company_id: companyId,
+        rating: userRating,
+        review: userReview
+      })
+      if (res.ok) {
+        // Reload ratings and data
+        const ratingsRes = await ratings.listForCompany(companyId)
+        if (ratingsRes.ok) setManualRatings(ratingsRes.data)
+        const credRes = await credibility.get(companyId)
+        if (credRes.ok) setData(credRes.data)
+        alert('Rating submitted successfully!')
+      }
+    } catch (err) {
+      console.error('Rating submit error:', err)
+    } finally {
+      setSubmittingRating(false)
+    }
+  }
 
   const fetchAiAnalysis = async () => {
     if (aiAnalysis) return
@@ -412,14 +464,19 @@ CredibilityDetail() {
           <p className="text-xs
             text-gray-500 mb-2
             font-medium">
-            Performance
+            Global CBI
           </p>
-          <StarRating
-            stars={data.stars}
-          />
+          <div className="flex items-center gap-2">
+            <span className="text-xl font-bold text-amber-500">
+              {data.global_cbi_stars || '0.0'}
+            </span>
+            <StarRating
+              stars={Math.round(data.global_cbi_stars || 0)}
+            />
+          </div>
           <p className="text-xs
             text-gray-400 mt-2">
-            {data.stars}/5 stars
+            Average of {manualRatings.length} partner ratings
           </p>
         </div>
 
@@ -457,6 +514,7 @@ CredibilityDetail() {
         mb-4 border-b">
         {['overview',
           'financials',
+          'ratings',
           'ai-report'
         ].map(tab => (
           <button
@@ -474,9 +532,9 @@ CredibilityDetail() {
           >
             {tab === 'ai-report'
               ? 'AI Report'
-              : tab.charAt(0)
-                  .toUpperCase() +
-                tab.slice(1)}
+              : tab === 'ratings'
+              ? 'Business Rating'
+              : tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
       </div>
@@ -485,6 +543,100 @@ CredibilityDetail() {
       <div className="bg-white
         rounded-xl shadow-sm border
         p-6 mb-6">
+
+        {/* Ratings Tab */}
+        {activeTab === 'ratings' && ( 
+          <div className="space-y-6"> 
+            {/* Star Rating Display */} 
+            <div className="flex flex-col items-center py-6 border-b"> 
+              <p className="text-sm text-gray-500 mb-3 font-medium">Partner Rating Score</p> 
+              <div className="flex items-center gap-3 mb-2"> 
+                <span className="text-5xl font-bold text-amber-500"> 
+                  {(data.global_cbi_stars || 0).toFixed(1)} 
+                </span> 
+                <div className="flex flex-col gap-1"> 
+                  <div className="flex gap-1"> 
+                    {[1, 2, 3, 4, 5].map(i => { 
+                      const val = data.global_cbi_stars || 0 
+                      const full = i <= Math.floor(val) 
+                      const half = !full && i === Math.ceil(val) && val % 1 >= 0.25 
+                      return ( 
+                        <span key={i} className="text-2xl relative" style={{display:'inline-block', width:'1.2em'}}> 
+                          <span className="text-gray-200">★</span> 
+                          {(full || half) && ( 
+                            <span 
+                              className="absolute left-0 top-0 text-amber-400 overflow-hidden" 
+                              style={{width: full ? '100%' : '50%'}} 
+                            >★</span> 
+                          )} 
+                        </span> 
+                      ) 
+                    })} 
+                  </div> 
+                  <p className="text-xs text-gray-400">{manualRatings.length} partner {manualRatings.length === 1 ? 'rating' : 'ratings'}</p> 
+                </div> 
+              </div> 
+            </div> 
+        
+            {/* AI Recommendation based on stars */} 
+            <div className={`rounded-xl p-5 border-l-4 ${ 
+              (data.global_cbi_stars || 0) >= 4 
+                ? 'bg-green-50 border-green-500' 
+                : (data.global_cbi_stars || 0) >= 3 
+                ? 'bg-yellow-50 border-yellow-500' 
+                : (data.global_cbi_stars || 0) >= 2 
+                ? 'bg-orange-50 border-orange-500' 
+                : 'bg-red-50 border-red-500' 
+            }`}> 
+              <div className="flex items-center gap-3 mb-2"> 
+                <span className="text-2xl"> 
+                  {(data.global_cbi_stars || 0) >= 4 ? '✅' : (data.global_cbi_stars || 0) >= 3 ? '⚠️' : '❌'} 
+                </span> 
+                <p className={`font-bold text-base ${ 
+                  (data.global_cbi_stars || 0) >= 4 
+                    ? 'text-green-700' 
+                    : (data.global_cbi_stars || 0) >= 3 
+                    ? 'text-yellow-700' 
+                    : 'text-red-700' 
+                }`}> 
+                  {(data.global_cbi_stars || 0) >= 4 
+                    ? 'Safe to do business' 
+                    : (data.global_cbi_stars || 0) >= 3 
+                    ? 'Proceed with caution' 
+                    : (data.global_cbi_stars || 0) >= 2 
+                    ? 'High risk — verify before proceeding' 
+                    : manualRatings.length === 0 
+                    ? 'No ratings yet — insufficient data' 
+                    : 'Not recommended'} 
+                </p> 
+              </div> 
+              <p className={`text-sm ${ 
+                (data.global_cbi_stars || 0) >= 4 
+                  ? 'text-green-600' 
+                  : (data.global_cbi_stars || 0) >= 3 
+                  ? 'text-yellow-600' 
+                  : 'text-red-600' 
+              }`}> 
+                {(data.global_cbi_stars || 0) >= 4 
+                  ? `${data.company_name} has an excellent partner rating of ${(data.global_cbi_stars || 0).toFixed(1)}/5. Business partners consistently report positive experiences. Low risk of payment delays.` 
+                  : (data.global_cbi_stars || 0) >= 3 
+                  ? `${data.company_name} has an average partner rating of ${(data.global_cbi_stars || 0).toFixed(1)}/5. Some partners have reported minor issues. Consider shorter payment terms.` 
+                  : (data.global_cbi_stars || 0) >= 2 
+                  ? `${data.company_name} has a below average rating of ${(data.global_cbi_stars || 0).toFixed(1)}/5. Multiple partners have flagged concerns. Recommend advance payment only.` 
+                  : manualRatings.length === 0 
+                  ? `${data.company_name} has not been rated by any business partners yet. Use credit score and PO fulfillment data to assess risk.` 
+                  : `${data.company_name} has a poor partner rating of ${(data.global_cbi_stars || 0).toFixed(1)}/5. High risk of payment default. Not recommended for credit transactions.`} 
+              </p> 
+            </div> 
+        
+            {/* Rating breakdown if ratings exist */} 
+            {manualRatings.length > 0 && ( 
+              <div className="text-sm text-gray-500 text-center"> 
+                Based on {manualRatings.length} verified business {manualRatings.length === 1 ? 'partner' : 'partners'} who have transacted with {data.company_name} 
+              </div> 
+            )} 
+          </div> 
+        )}
 
         {/* Overview Tab */}
         {activeTab === 'overview' && (

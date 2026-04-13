@@ -20,9 +20,24 @@ const API_BASE_URL = (() => {
  */
 async function apiRequest(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`
+  const timeout = options.timeout || 30000 // 30s default timeout
+  
+  // Create AbortController if signal is not provided
+  let controller = null
+  let signal = options.signal
+  let timeoutId = null
+
+  if (!signal) {
+    controller = new AbortController()
+    signal = controller.signal
+    timeoutId = setTimeout(() => {
+      if (controller) controller.abort('timeout')
+    }, timeout)
+  }
 
   const defaultOptions = {
     credentials: 'include', // Send cookies with every request
+    signal: signal,
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -30,8 +45,15 @@ async function apiRequest(endpoint, options = {}) {
     ...options,
   }
 
+  // Manually attach access_token from localStorage if available (fallback for non-cookie scenarios)
+  const token = localStorage.getItem('access_token') || localStorage.getItem('token')
+  if (token && token !== 'undefined' && token !== 'null' && !defaultOptions.headers['Authorization']) {
+    defaultOptions.headers['Authorization'] = `Bearer ${token}`
+  }
+
   try {
     const response = await fetch(url, defaultOptions)
+    if (timeoutId) clearTimeout(timeoutId)
     const contentType = response.headers.get('content-type')
     let data = null
 
@@ -43,12 +65,22 @@ async function apiRequest(endpoint, options = {}) {
 
     // Handle 401 Unauthorized - Try to refresh token
     if (response.status === 401) {
+      // Clear local token if backend says it's invalid
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('token')
+
       const refreshed = await refreshAccessToken()
       if (refreshed) {
         // Retry the original request after refresh
         return apiRequest(endpoint, options)
       }
-      // If refresh failed, return unauthorized error
+      
+      // If refresh failed or not possible, redirect to login
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/auth/login')) {
+        console.warn('Unauthorized access, redirecting to login...')
+        window.location.href = '/auth/login?expired=true'
+      }
+
       return {
         ok: false,
         status: 401,
@@ -85,7 +117,18 @@ async function apiRequest(endpoint, options = {}) {
       error: null,
     }
   } catch (error) {
+    if (timeoutId) clearTimeout(timeoutId)
     console.error(`API Request Error [${endpoint}]:`, error)
+    
+    if (error.name === 'AbortError') {
+      return {
+        ok: false,
+        status: 408,
+        error: 'Request timed out. Please check your internet connection or server status.',
+        data: null,
+      }
+    }
+    
     return {
       ok: false,
       status: 0,
@@ -143,7 +186,7 @@ export const api = {
 // Export API methods grouped by feature
 export const auth = {
   register: (data) => apiRequest('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
-  login: (data) => apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
+  login: (data) => apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(data), timeout: 10000 }),
   logout: () => logout(),
   refreshToken: () => refreshAccessToken(),
   sendOtp: (data) => apiRequest('/auth/otp/send', { method: 'POST', body: JSON.stringify(data) }),
@@ -156,9 +199,9 @@ export const auth = {
 }
 
 export const user = {
-  getProfile: () => apiRequest('/user/profile'),
+  getProfile: () => apiRequest('/user/profile', { timeout: 10000 }),
   updateProfile: (data) => apiRequest('/user/profile', { method: 'PUT', body: JSON.stringify(data) }),
-  getSubscription: () => apiRequest('/user/subscription'),
+  getSubscription: () => apiRequest('/user/subscription', { timeout: 10000 }),
   sendPhoneChangeOtp: (data) => apiRequest('/user/phone-change/send-otp', { method: 'POST', body: JSON.stringify(data) }),
   verifyPhoneChangeOtp: (data) => apiRequest('/user/phone-change/verify-otp', { method: 'POST', body: JSON.stringify(data) }),
   sendEmailChangeOtp: (data) => apiRequest('/user/email-change/send-otp', { method: 'POST', body: JSON.stringify(data) }),
@@ -167,12 +210,12 @@ export const user = {
 
 export const purchaseOrders = {
   create: (data) => apiRequest('/purchase-orders', { method: 'POST', body: JSON.stringify(data) }),
-  list: (page = 1, pageSize = 20, includeArchived = false) => apiRequest(`/purchase-orders?page=${page}&page_size=${pageSize}&include_archived=${includeArchived}`),
+  list: (page = 1, pageSize = 20, includeArchived = false, opt = {}) => apiRequest(`/purchase-orders?page=${page}&page_size=${pageSize}&include_archived=${includeArchived}`, opt),
   get: (id) => apiRequest(`/purchase-orders/${id}`),
   update: (id, data) => apiRequest(`/purchase-orders/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  delete: (id) => apiRequest(`/purchase-orders/${id}`, { method: 'DELETE' }),
-  archive: (id) => apiRequest(`/purchase-orders/${id}/archive`, { method: 'POST' }),
-  markPaid: (id) => apiRequest(`/purchase-orders/${id}/mark-paid`, { method: 'POST' }),
+  delete: (id, data) => apiRequest(`/purchase-orders/${id}`, { method: 'DELETE', body: data ? JSON.stringify(data) : undefined }),
+  archive: (id, data) => apiRequest(`/purchase-orders/${id}/archive`, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
+  markPaid: (id, data) => apiRequest(`/purchase-orders/${id}/mark-paid`, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
   sendReminder: (id) => apiRequest(`/purchase-orders/${id}/send-reminder`, { method: 'POST' }),
   sendLegalNotice: (id, data) => apiRequest(`/purchase-orders/${id}/send-legal-notice`, { method: 'POST', body: JSON.stringify(data) }),
 }
@@ -189,11 +232,11 @@ export const getPOReminderConfig = () => apiRequest('/admin/po-reminders')
 
 export const updatePOReminderConfig = (data) => apiRequest('/admin/po-reminders', { method: 'PUT', body: JSON.stringify(data) })
 
-export const sendChatMessage = (message) => apiRequest('/chat', { method: 'POST', body: JSON.stringify({ message }) })
+export const sendChatMessage = (message) => apiRequest('/chat', { method: 'POST', body: JSON.stringify({ message }), timeout: 60000 })
 
 export const defaulters = {
   create: (data) => apiRequest('/defaulters', { method: 'POST', body: JSON.stringify(data) }),
-  list: (page = 1, pageSize = 20) => apiRequest(`/defaulters?page=${page}&page_size=${pageSize}`),
+  list: (page = 1, pageSize = 20, opt = {}) => apiRequest(`/defaulters?page=${page}&page_size=${pageSize}`, opt),
   get: (id) => apiRequest(`/defaulters/${id}`),
   update: (id, data) => apiRequest(`/defaulters/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id) => apiRequest(`/defaulters/${id}`, { method: 'DELETE' }),
@@ -202,7 +245,7 @@ export const defaulters = {
 
 export const invoices = {
   create: (data) => apiRequest('/invoices', { method: 'POST', body: JSON.stringify(data) }),
-  list: (params = {}) => {
+  list: (params = {}, opt = {}) => {
     const queryParams = new URLSearchParams()
     if (params.skip !== undefined) queryParams.append('skip', params.skip)
     if (params.limit !== undefined) queryParams.append('limit', params.limit)
@@ -211,35 +254,35 @@ export const invoices = {
     if (params.counterparty_pan) queryParams.append('counterparty_pan', params.counterparty_pan)
     if (params.search) queryParams.append('search', params.search)
     const query = queryParams.toString()
-    return apiRequest(`/invoices${query ? '?' + query : ''}`)
+    return apiRequest(`/invoices${query ? '?' + query : ''}`, opt)
   },
   get: (id) => apiRequest(`/invoices/${id}`),
   update: (id, data) => apiRequest(`/invoices/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id) => apiRequest(`/invoices/${id}`, { method: 'DELETE' }),
   toggleAcknowledgment: (id) => apiRequest(`/invoices/${id}/acknowledge`, { method: 'POST' }),
   addFollowUpNote: (id, note) => apiRequest(`/invoices/${id}/follow-up`, { method: 'POST', body: JSON.stringify({ note }) }),
-  getDueReminders: () => apiRequest('/invoices/reminders/due'),
+  getDueReminders: (opt = {}) => apiRequest('/invoices/reminders/due', opt),
 }
 
 export const creditReports = {
   create: (data) => apiRequest('/credit-reports', { method: 'POST', body: JSON.stringify(data) }),
-  list: (page = 1, pageSize = 20) => apiRequest(`/credit-reports?page=${page}&page_size=${pageSize}`),
+  list: (page = 1, pageSize = 20, opt = {}) => apiRequest(`/credit-reports?page=${page}&page_size=${pageSize}`, opt),
   get: (id) => apiRequest(`/credit-reports/${id}`),
   update: (id, data) => apiRequest(`/credit-reports/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
 }
 
 export const settlements = {
   create: (data) => apiRequest('/settlements', { method: 'POST', body: JSON.stringify(data) }),
-  list: (page = 1, pageSize = 20) => apiRequest(`/settlements?page=${page}&page_size=${pageSize}`),
+  list: (page = 1, pageSize = 20, opt = {}) => apiRequest(`/settlements?page=${page}&page_size=${pageSize}`, opt),
   get: (id) => apiRequest(`/settlements/${id}`),
   update: (id, data) => apiRequest(`/settlements/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
 }
 
 export const appointments = {
   create: (data) => apiRequest('/appointments', { method: 'POST', body: JSON.stringify(data) }),
-  list: (status = null) => {
+  list: (status = null, opt = {}) => {
     const query = status ? `?status=${status}` : ''
-    return apiRequest(`/appointments${query}`)
+    return apiRequest(`/appointments${query}`, opt)
   },
   get: (id) => apiRequest(`/appointments/${id}`),
   update: (id, data) => apiRequest(`/appointments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -263,7 +306,7 @@ export const cms = {
 }
 
 export const wallet = {
-  getBalance: () => apiRequest('/wallet/balance'),
+  getBalance: (opt = {}) => apiRequest('/wallet/balance', opt),
   getHistory: (page = 1, limit = 10) => apiRequest(`/wallet/history?page=${page}&limit=${limit}`),
   redeem: (amount, reference) => apiRequest('/wallet/redeem', { method: 'POST', body: JSON.stringify({ amount, reference }) }),
 }
@@ -289,7 +332,7 @@ export const invitations = {
 export const credibility = {
   list: () => apiRequest('/credibility'),
   get: (id) => apiRequest(`/credibility/${id}`),
-  getAiAnalysis: (id) => apiRequest(`/credibility/${id}/ai-analysis`, { method: 'POST' }),
+  getAiAnalysis: (id) => apiRequest(`/credibility/${id}/ai-analysis`, { method: 'POST', timeout: 60000 }),
   recalculate: () => apiRequest('/credibility/recalculate', { method: 'POST' }),
 }
 
@@ -303,6 +346,29 @@ export const drive = {
     // Do NOT set Content-Type header for FormData; fetch sets it with boundary automatically
     headers: {}
   }),
+}
+
+export const ratings = {
+  check: (gstin) => {
+    if (!gstin) return Promise.resolve({ ok: false, error: 'GSTIN is required' })
+    return apiRequest('/ratings/check', { method: 'POST', body: JSON.stringify({ counterparty_gstin: String(gstin).trim().toUpperCase() }) })
+  },
+  submit: (data) => apiRequest('/ratings', { method: 'POST', body: JSON.stringify(data) }),
+  listForCompany: (companyId) => apiRequest(`/ratings/company/${companyId}`),
+  getGlobalCbi: () => apiRequest('/ratings/global-cbi'),
+  getAiAnalysis: (companyId) => apiRequest(`/ratings/ai-analyze/${companyId}`, { timeout: 60000 }),
+  getAiTrends: () => apiRequest('/ratings/ai-trends', { timeout: 60000 }),
+}
+
+export const audit = {
+  getLogs: (params = {}) => {
+    const queryParams = new URLSearchParams()
+    if (params.search) queryParams.append('search', params.search)
+    if (params.action && params.action !== 'all') queryParams.append('action', params.action)
+    if (params.date_from) queryParams.append('date_from', params.date_from)
+    const query = queryParams.toString()
+    return apiRequest(`/audit-logs${query ? '?' + query : ''}`)
+  },
 }
 
 // Utility: Check authentication status

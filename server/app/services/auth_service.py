@@ -154,6 +154,7 @@ class AuthService:
                 "company_id": user.company_id,
                 "company_name": user.company_name,
                 "role": user.role,
+                "subscription_status": user.subscription_status,
             },
             "tokens": tokens,
         }
@@ -182,6 +183,7 @@ class AuthService:
                 "gstin": user.gstin,
                 "email": user.email,
                 "company_name": user.company_name,
+                "subscription_status": user.subscription_status,
             },
             "tokens": tokens,
         }

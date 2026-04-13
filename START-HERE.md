@@ -282,3 +282,66 @@ See: [ADMIN-ARCHITECTURE.md](ADMIN-ARCHITECTURE.md)
 **Status: ✅ All configuration errors fixed | Admin system fully implemented | Ready for deployment**
 
 *Last updated: 2024 | Version: 1.0*
+
+
+
+ CreditDataWatch — How To Use (Quick Start)
+Step 1 — Start the servers
+
+Start backend: open terminal in server/ folder → python main.py
+Start frontend: open terminal in client/ folder → npm run dev
+Frontend runs on localhost:3001, backend on localhost:8000
+
+Step 2 — Register your company
+
+Go to localhost:3001/register
+Enter company name, GSTIN, email, password
+First person to register with a GSTIN becomes MASTER_ADMIN
+Note: payalshinde906@gmail.com is the developer account — always has full access
+
+Step 3 — Login
+
+Go to localhost:3001/login
+Use email + password OR email + OTP
+After login you land on the Dashboard
+
+Step 4 — Add Purchase Orders
+
+Go to Purchase Orders from the navbar
+Fill in: PO Number, Vendor Name, GSTIN, Email, Phone, Amount, Due Date, Payment Window
+Click Save PO
+PO appears in the table with Days Left and Status calculated automatically
+
+Step 5 — Manage POs
+
+✅ Mark as Paid — closes the PO
+✏️ Edit — update any field (asks for reason, gets logged)
+📧 Send Reminder — sends email to vendor
+⚖️ Legal Support — notifies legal team
+🗄️ Archive — hides from main view
+🗑️ Delete — permanently removes (asks for reason, gets logged)
+
+Step 6 — Check Credibility
+
+Go to Credibility Index from navbar
+See Direct Trade Reliability — your business history with vendors
+See Network Trust Intelligence — platform-wide star ratings + AI risk verdict
+
+Step 7 — Invite Team Members
+
+Go to localhost:3001/admin/team
+Enter email, select role (OPERATIONS / ADMIN / LEGAL etc.), set expiry hours
+Click Send Invitation — email sent automatically
+Invited person clicks link → fills password → joins your company
+
+Step 8 — View Audit Logs (MASTER_ADMIN only)
+
+Go to localhost:3001/audit-logs
+See all PO actions — who deleted/updated what and when
+Filter by action type, date, user or PO number
+
+Step 9 — Check Subscription
+
+Go to Membership from navbar
+View current plan and status
+Upgrade plan to unlock more features

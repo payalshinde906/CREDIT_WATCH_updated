@@ -12,6 +12,7 @@ export default function EditPOModal({ po, onClose, onSave }) {
     status: 'open',
     notes: '',
     document_url: '',
+    reason: '',
   })
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -45,8 +46,8 @@ export default function EditPOModal({ po, onClose, onSave }) {
       return
     }
 
-    if (!form.number || !form.vendor_name || !form.amount || !form.due_date) {
-      setError('Fill all required fields.')
+    if (!form.number || !form.vendor_name || !form.amount || !form.due_date || !form.reason) {
+      setError('Fill all required fields (including reason).')
       return
     }
 
@@ -59,6 +60,7 @@ export default function EditPOModal({ po, onClose, onSave }) {
       status: form.status,
       notes: form.notes?.trim() || '',
       document_url: form.document_url?.trim() || '',
+      reason: form.reason.trim(),
     }
 
     setSaving(true)
@@ -252,6 +254,21 @@ export default function EditPOModal({ po, onClose, onSave }) {
               value={form.document_url}
               onChange={handleChange}
               placeholder="https://drive.google.com/..."
+            />
+          </div>
+
+          <div>
+            <label htmlFor="po-reason" className="block text-sm font-medium text-gray-700 mb-1">
+              Reason for Update <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              id="po-reason"
+              className="w-full rounded-lg border border-red-300 px-4 py-3 focus:border-red-500 focus:ring-2 focus:ring-red-200 min-h-[80px]"
+              name="reason"
+              value={form.reason}
+              onChange={handleChange}
+              placeholder="Explain why you are modifying this purchase order..."
+              required
             />
           </div>
 

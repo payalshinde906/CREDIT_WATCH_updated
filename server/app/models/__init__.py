@@ -55,12 +55,15 @@ class Company(Base):
     gstin = Column(String(15), unique=True, nullable=False, index=True)
     domain_name = Column(String(255), nullable=False, index=True)
     is_verified = Column(Boolean, default=False, index=True)
+    global_cbi_stars = Column(Float, default=0.0, index=True) # Manual ratings average (0-5 stars)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     users = relationship("User", back_populates="company", cascade=CASCADE_DELETE_ORPHAN)
     purchase_orders = relationship("PurchaseOrder", back_populates="company", cascade=CASCADE_DELETE_ORPHAN)
+    received_ratings = relationship("CompanyRating", foreign_keys="CompanyRating.to_company_id", back_populates="to_company", cascade=CASCADE_DELETE_ORPHAN)
+    given_ratings = relationship("CompanyRating", foreign_keys="CompanyRating.from_company_id", back_populates="from_company", cascade=CASCADE_DELETE_ORPHAN)
 
 
 class User(Base):
@@ -114,7 +117,7 @@ class Subscription(Base):
     id = Column(String(36), primary_key=True, index=True)
     user_id = Column(String(36), ForeignKey(USER_ID_FK, ondelete=ONDELETE_CASCADE), nullable=False, index=True)
     plan_id = Column(String(36), ForeignKey("plans.id"), nullable=False, index=True)
-    status = Column(Enum(MembershipStatus), default=MembershipStatus.ACTIVE, nullable=False, index=True)
+    status = Column(String(20), default="active", nullable=False, index=True)
     is_active = Column(Boolean, default=True, index=True)
     start_date = Column(DateTime, default=datetime.utcnow, nullable=False)
     expiry_date = Column(DateTime, nullable=True, index=True)
@@ -142,7 +145,7 @@ class Plan(Base):
     name = Column(String(100), nullable=False, unique=True, index=True)  # basic, pro, premium
     display_name = Column(String(100), nullable=False)  # "Basic", "Pro", "Premium"
     description = Column(Text, nullable=True)
-    duration_type = Column(Enum(DurationType), default=DurationType.MONTHLY, nullable=False, index=True)  # monthly, yearly
+    duration_type = Column(String(20), default="monthly", nullable=False, index=True)  # monthly, yearly
     price = Column(Float, nullable=False, default=0)  # in INR
     validity_days = Column(Integer, nullable=False, default=30)  # Calculated from duration_type
     follow_up_limit = Column(Integer, nullable=False, default=10)  # max follow-ups per case
@@ -489,9 +492,9 @@ class Payment(Base):
     plan_id = Column(String(36), ForeignKey("plans.id"), nullable=False, index=True)
     amount = Column(Float, nullable=False)  # in INR
     currency = Column(String(10), default="INR", nullable=False)
-    payment_method = Column(Enum(PaymentMethod), nullable=False, index=True)
+    payment_method = Column(String(20), nullable=False, index=True)
     payment_provider = Column(String(50), nullable=True)  # "razorpay", "payu", "stripe", etc.
-    status = Column(Enum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False, index=True)
+    status = Column(String(20), default="pending", nullable=False, index=True)
     transaction_id = Column(String(255), unique=True, nullable=True, index=True)  # Gateway transaction ID
     reference_id = Column(String(255), unique=True, nullable=False, index=True)  # Internal reference
     gateway_order_id = Column(String(255), nullable=True)  # Payment gateway order ID
@@ -595,4 +598,23 @@ class AppSettings(Base):
     id = Column(String(36), primary_key=True, index=True)
     payment_window_days = Column(Integer, nullable=False, default=50)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class CompanyRating(Base):
+    """Manual ratings from one company to another"""
+    __tablename__ = "company_ratings"
+    id = Column(String(36), primary_key=True, index=True)
+    from_company_id = Column(String(36), ForeignKey("companies.id", ondelete=ONDELETE_CASCADE), nullable=False, index=True)
+    to_company_id = Column(String(36), ForeignKey("companies.id", ondelete=ONDELETE_CASCADE), nullable=False, index=True)
+    rating = Column(Integer, nullable=False, index=True)  # 1-5 stars
+    review = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    from_company = relationship("Company", foreign_keys=[from_company_id], back_populates="given_ratings")
+    to_company = relationship("Company", foreign_keys=[to_company_id], back_populates="received_ratings")
+
+    __table_args__ = (
+        Index("idx_rating_from_to", "from_company_id", "to_company_id", unique=True),
+    )
 

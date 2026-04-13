@@ -8,6 +8,7 @@ export default function TeamManagement() {
   const [form, setForm] = useState({ email: '', role: 'OPERATIONS', expiry_hours: 24 })
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({ role: 'OPERATIONS', expiry_hours: 24 })
+  const [sendingInvite, setSendingInvite] = useState(false)
 
   const loadInvitations = async () => {
     setLoading(true)
@@ -71,14 +72,16 @@ export default function TeamManagement() {
       setMessage('Expiry must be between 1 and 168 hours')
       return
     }
+    setSendingInvite(true) 
     const res = await adminApi.createInvitation({ email, role, expiry_hours: hours })
     if (res.ok) {
-      setMessage(`Invitation created. Token: ${res.data?.token}`)
+      setMessage('✅ Invitation sent successfully!')
       setForm({ email: '', role: 'OPERATIONS', expiry_hours: 24 })
       await loadInvitations()
     } else {
       setMessage(res.error || 'Failed to create invitation')
     }
+    setSendingInvite(false) 
   }
 
   return (
@@ -172,10 +175,14 @@ export default function TeamManagement() {
               <h2 className="text-lg font-heading font-semibold text-gray-900">Invite Employee</h2>
               <span className="text-xs text-gray-500">Admin only</span>
             </div>
-            {message && (
-              <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-xs text-gray-700">
-                {message}
-              </div>
+            {message && ( 
+              <div className={`rounded-lg px-4 py-2 text-sm font-medium ${ 
+                message.includes('✅') 
+                  ? 'bg-green-50 border border-green-200 text-green-700' 
+                  : 'bg-red-50 border border-red-200 text-red-700' 
+              }`}> 
+                {message} 
+              </div> 
             )}
             <form className="space-y-3" onSubmit={handleSubmit}>
               <div>
@@ -213,7 +220,23 @@ export default function TeamManagement() {
                 />
                 <p className="text-xs text-gray-500 mt-1">Between 1 and 168 hours. Default is 24.</p>
               </div>
-              <button type="submit" className="btn-primary w-full">Send Invitation</button>
+              <button 
+                type="submit" 
+                disabled={sendingInvite} 
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-70 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2" 
+              > 
+                {sendingInvite ? ( 
+                  <> 
+                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"> 
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/> 
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/> 
+                    </svg> 
+                    Sending... 
+                  </> 
+                ) : ( 
+                  'Send Invitation' 
+                )} 
+              </button> 
             </form>
           </div>
         </div>

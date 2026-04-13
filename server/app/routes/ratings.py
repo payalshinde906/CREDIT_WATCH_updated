@@ -6,11 +6,78 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import Company, PurchaseOrder, Invoice, User
+from app.models import Company, PurchaseOrder, Invoice, User, CompanyRating
+from app.services.rating_service import RatingService
+from app.services.ai_cbi_service import AICBIService
+from app.schemas.rating import RatingCreate, RatingResponse
 from app.utils import ResponseFormatter
 from datetime import datetime
 
 router = APIRouter(tags=["Ratings"])
+
+@router.get("/ratings/ai-analyze/{company_id}")
+async def ai_analyze_company(
+    company_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """AI-based analysis of company reliability using manual ratings"""
+    analysis = await AICBIService.analyze_company_reliability(db, company_id)
+    return ResponseFormatter.create_success(data={"analysis": analysis})
+
+@router.get("/ratings/ai-trends")
+async def ai_platform_trends(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """AI-based summary of overall platform credibility trends"""
+    summary = await AICBIService.summarize_platform_trends(db)
+    return ResponseFormatter.create_success(data={"summary": summary})
+
+@router.post("/ratings", response_model=dict)
+async def submit_rating(
+    payload: RatingCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Submit or update a rating for another company"""
+    try:
+        rating = await RatingService.create_rating(db, current_user, payload)
+        await db.commit()
+        return ResponseFormatter.create_success(
+            message="Rating submitted successfully",
+            data={"id": rating.id, "rating": rating.rating}
+        )
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/ratings/company/{company_id}")
+async def get_company_ratings(
+    company_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get all ratings for a specific company"""
+    ratings = await RatingService.get_company_ratings(db, company_id)
+    return ResponseFormatter.create_success(data=[RatingResponse.model_validate(r).model_dump() for r in ratings])
+
+@router.get("/ratings/global-cbi")
+async def get_global_cbi(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get Global CBI ratings for all companies (Admin or visibility check)"""
+    companies = await RatingService.get_all_companies_cbi(db)
+    return ResponseFormatter.create_success(
+        data=[{
+            "id": c.id,
+            "company_name": c.company_name,
+            "gstin": c.gstin,
+            "global_cbi_stars": c.global_cbi_stars,
+            "is_verified": c.is_verified
+        } for c in companies]
+    )
 
 @router.post("/ratings/check")
 async def check_rating_allowed(

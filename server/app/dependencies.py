@@ -13,6 +13,10 @@ from app.exceptions import InvalidCredentials, UserNotFound
 
 security = HTTPBearer(auto_error=False)
 
+DEVELOPER_EMAILS = ["payalshinde906@gmail.com"] 
+
+def is_developer(user) -> bool: 
+    return user.email in DEVELOPER_EMAILS 
 
 async def get_current_user(
     request: Request,

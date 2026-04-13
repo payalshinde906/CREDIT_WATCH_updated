@@ -31,6 +31,9 @@ export default function PurchaseOrders() {
     const [reminderPO, setReminderPO] = useState(null)
     const [showArchived, setShowArchived] = useState(false)
     const [deleteConfirm, setDeleteConfirm] = useState(null)
+    const [reasonModal, setReasonModal] = useState({ open: false, action: '', po: null, onConfirm: null }) 
+    const [reasonText, setReasonText] = useState('') 
+    const [reason, setReason] = useState('')
   const [showCSVImport, setShowCSVImport] = useState(false)
   const [showLegalNotice, setShowLegalNotice] = useState(false);
   const [showLegalConfirm, setShowLegalNoticeConfirm] = useState(null);
@@ -232,32 +235,37 @@ export default function PurchaseOrders() {
       payment_window_days: parseInt(form.payment_window_days || 50),
     }
 
-    setIsLoading(true)
-    try {
-      const res = await purchaseOrders.create(payload)
-      if (!res.ok) {
-        setStatusMessage(res.error || 'Failed to save PO')
-        return
+    setReasonModal({
+      open: true,
+      action: 'CREATE',
+      po: { po_number: form.po_number },
+      onConfirm: async (reason) => {
+        setIsLoading(true)
+        try {
+          const res = await purchaseOrders.create({ ...payload, reason })
+          if (!res.ok) {
+            setStatusMessage(res.error || 'Failed to save PO')
+            return
+          }
+          // Refresh list from backend to ensure consistency
+          setLoading(true)
+          const resList = await purchaseOrders.list(1, 100, true)
+          if (resList.ok && Array.isArray(resList.data?.items)) {
+            setRows(resList.data.items)
+          } else if (resList.ok && Array.isArray(resList.data)) {
+            setRows(resList.data)
+          }
+          setLoading(false)
+          setForm({ po_number: '', vendor: '', gstin: '', vendor_email: '', vendor_phone: '', amount: '', due_date: '', status: 'open', document_url: '', payment_window_days: 50 })
+          setStatusMessage('PO saved to backend successfully.')
+          window.dispatchEvent(new Event('poChanged'))
+        } catch (err) {
+          setStatusMessage(err?.message || 'Failed to save PO')
+        } finally {
+          setIsLoading(false)
+        }
       }
-    } catch (err) {
-      setStatusMessage(err?.message || 'Failed to save PO')
-      return
-    } finally {
-      setIsLoading(false)
-    }
-
-    // Refresh list from backend to ensure consistency
-    setLoading(true)
-    const resList = await purchaseOrders.list(1, 100, true)
-    if (resList.ok && Array.isArray(resList.data?.items)) {
-      setRows(resList.data.items)
-    } else if (resList.ok && Array.isArray(resList.data)) {
-      setRows(resList.data)
-    }
-    setLoading(false)
-    setForm({ po_number: '', vendor: '', gstin: '', vendor_email: '', vendor_phone: '', amount: '', due_date: '', status: 'open', document_url: '', payment_window_days: 50 })
-    setStatusMessage('PO saved to backend successfully.')
-    window.dispatchEvent(new Event('poChanged'))
+    })
   }
 
     const handleEdit = (po) => {
@@ -299,31 +307,41 @@ export default function PurchaseOrders() {
     }
 
     const handleDelete = (po) => {
-      setDeleteConfirm(po)
-    }
-
-    const confirmDelete = async () => {
-      if (!deleteConfirm) return
-      const res = await purchaseOrders.delete(deleteConfirm.id)
-      if (res.ok) {
-        setRows((prev) => prev.filter(r => r.id !== deleteConfirm.id))
-        setStatusMessage('PO deleted permanently.')
-        window.dispatchEvent(new Event('poChanged'))
-      } else {
-        setStatusMessage(res.error || 'Failed to delete PO')
-      }
-      setDeleteConfirm(null)
+      setReasonModal({
+        open: true,
+        action: 'DELETE',
+        po: po,
+        onConfirm: async (reason) => {
+          setIsLoading(true)
+          const res = await purchaseOrders.delete(po.id, { reason })
+          setIsLoading(false)
+          if (res.ok) {
+            setRows((prev) => prev.filter(r => r.id !== po.id))
+            setStatusMessage('PO deleted permanently.')
+            window.dispatchEvent(new Event('poChanged'))
+          } else {
+            setStatusMessage(res.error || 'Failed to delete PO')
+          }
+        }
+      })
     }
 
     const handleArchive = async (po) => {
-      const res = await purchaseOrders.archive(po.id)
-      if (res.ok) {
-        setRows((prev) => prev.map(r => r.id === po.id ? { ...r, archived: !r.archived } : r))
-        setStatusMessage(po.archived ? 'PO restored from archive.' : 'PO archived.')
-        window.dispatchEvent(new Event('poChanged'))
-      } else {
-        setStatusMessage(res.error || 'Failed to archive PO')
-      }
+      setReasonModal({
+        open: true,
+        action: po.archived ? 'UNARCHIVE' : 'ARCHIVE',
+        po: po,
+        onConfirm: async (reason) => {
+          const res = await purchaseOrders.archive(po.id, { reason })
+          if (res.ok) {
+            setRows((prev) => prev.map(r => r.id === po.id ? { ...r, archived: !r.archived } : r))
+            setStatusMessage(po.archived ? 'PO restored from archive.' : 'PO archived.')
+            window.dispatchEvent(new Event('poChanged'))
+          } else {
+            setStatusMessage(res.error || 'Failed to archive PO')
+          }
+        }
+      })
     }
 
     const handleSendToLegal = async (po) => {
@@ -360,7 +378,10 @@ export default function PurchaseOrders() {
         return false;
       }
 
+      setIsLoading(true);
       const res = await sendPOReminder(reminderPO.id, payload)
+      setIsLoading(false);
+
       if (res.ok) {
         if (payload.scheduled_at) {
           const dt = new Date(payload.scheduled_at).toLocaleString()
@@ -386,23 +407,30 @@ export default function PurchaseOrders() {
 
   
     const handleMarkPaid = async (po) => {
-      setLoadingId(po.id)
-      const res = await purchaseOrders.markPaid(po.id)
-      if (res.ok) {
-        setStatusMessage('PO marked as paid.')
-        setLoading(true)
-        const resList = await purchaseOrders.list(1, 100, true)
-        if (resList.ok && Array.isArray(resList.data?.items)) {
-          setRows(resList.data.items)
-        } else if (resList.ok && Array.isArray(resList.data)) {
-          setRows(resList.data)
+      setReasonModal({
+        open: true,
+        action: 'MARK_PAID',
+        po: po,
+        onConfirm: async (reason) => {
+          setLoadingId(po.id)
+          const res = await purchaseOrders.markPaid(po.id, { reason })
+          if (res.ok) {
+            setStatusMessage('PO marked as paid.')
+            setLoading(true)
+            const resList = await purchaseOrders.list(1, 100, true)
+            if (resList.ok && Array.isArray(resList.data?.items)) {
+              setRows(resList.data.items)
+            } else if (resList.ok && Array.isArray(resList.data)) {
+              setRows(resList.data)
+            }
+            setLoading(false)
+            window.dispatchEvent(new Event('poChanged'))
+          } else {
+            setStatusMessage(res.error || 'Failed to mark as paid')
+          }
+          setLoadingId(null)
         }
-        setLoading(false)
-        window.dispatchEvent(new Event('poChanged'))
-      } else {
-        setStatusMessage(res.error || 'Failed to mark as paid')
-      }
-      setLoadingId(null)
+      })
     }
   
     const handleImportComplete = async () => {
@@ -954,30 +982,48 @@ export default function PurchaseOrders() {
             />
           )}
 
-          {deleteConfirm && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-              <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Confirm Delete</h3>
-                <p className="text-gray-600 mb-4">
-                  Are you sure you want to permanently delete PO <strong>{deleteConfirm.po_number}</strong>?
-                  This action cannot be undone.
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setDeleteConfirm(null)}
-                    className="flex-1 px-6 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={confirmDelete}
-                    className="flex-1 px-6 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </div>
+          {/* Reason Modal */} 
+          {reasonModal.open && ( 
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"> 
+              <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl"> 
+                <h3 className="text-lg font-bold text-gray-800 mb-1"> 
+                  ⚠️ Confirm {reasonModal.action} 
+                </h3> 
+                <p className="text-gray-500 text-sm mb-4"> 
+                  Action: <strong>{reasonModal.action}</strong> {reasonModal.po && <>on <strong>{reasonModal.po.po_number}</strong></>} 
+                </p> 
+                <label className="block text-sm font-medium text-gray-700 mb-2"> 
+                  Reason <span className="text-red-500">*</span> 
+                </label> 
+                <textarea 
+                  value={reasonText} 
+                  onChange={e => setReasonText(e.target.value)} 
+                  placeholder="Please enter a reason for this action..." 
+                  rows={3} 
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" 
+                  autoFocus
+                /> 
+                <div className="flex gap-3 mt-4"> 
+                  <button 
+                    onClick={() => { setReasonModal({ open: false }); setReasonText('') }} 
+                    className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-lg text-sm hover:bg-gray-50" 
+                  > 
+                    Cancel 
+                  </button> 
+                  <button 
+                    onClick={() => { 
+                      if (!reasonText.trim()) { alert('Please enter a reason'); return } 
+                      reasonModal.onConfirm(reasonText) 
+                      setReasonModal({ open: false }) 
+                      setReasonText('') 
+                    }} 
+                    className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm hover:bg-blue-700" 
+                  > 
+                    Confirm 
+                  </button> 
+                </div> 
+              </div> 
+            </div> 
           )}
 
           {showLegalConfirm && (

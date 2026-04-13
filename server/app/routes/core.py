@@ -15,12 +15,64 @@ from app.utils import ResponseFormatter, format_phone_e164
 from app.dependencies import get_current_user
 from app.exceptions import UnauthorizedFeature
 from app.utils.phone import is_valid_phone
+from app.config import settings
 import uuid
 from sqlalchemy import or_
 from app.services.email_service import EmailService, send_email_with_attachment
 from app.services.legal_notice_service import generate_legal_notice_pdf
 from app.models import Notification
 import os
+from sqlalchemy import text
+
+async def log_audit(db, user, action: str, po=None, reason: str = None, old_data: dict = None, new_data: dict = None): 
+    try: 
+        import uuid as uuid_lib, json 
+        from sqlalchemy import text 
+        is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+        now_func = "CURRENT_TIMESTAMP" if is_sqlite else "NOW()"
+        await db.execute(text(f""" 
+            INSERT INTO audit_logs (id, user_id, user_email, user_name, action, entity_type, entity_id, po_number, vendor_name, reason, old_data, new_data, created_at) 
+            VALUES (:id, :user_id, :user_email, :user_name, :action, :entity_type, :entity_id, :po_number, :vendor_name, :reason, :old_data, :new_data, {now_func}) 
+        """), { 
+            "id": str(uuid_lib.uuid4()), 
+            "user_id": str(user.id) if user else None, 
+            "user_email": user.email if user else None, 
+            "user_name": getattr(user, 'name', user.email) if user else None, 
+            "action": action, 
+            "entity_type": "PO", 
+            "entity_id": str(po.id) if po else None, 
+            "po_number": po.po_number if po else None, 
+            "vendor_name": po.vendor if po else None, 
+            "reason": reason, 
+            "old_data": json.dumps(old_data) if old_data else None, 
+            "new_data": json.dumps(new_data) if new_data else None, 
+        }) 
+        await db.commit() 
+        print(f"[AUDIT] Logged: {action} on {po.po_number if po else 'N/A'} by {user.email if user else 'N/A'}") 
+    except Exception as e: 
+        print(f"[AUDIT ERROR] Failed to log: {e}") 
+
+async def write_audit_log(db, po_id, po_number, action, user_email, user_role, reason="", changes=""): 
+    try: 
+        await db.execute( 
+            text(""" 
+                INSERT INTO po_audit_logs 
+                (po_id, po_number, action, performed_by_email, performed_by_role, reason, changes_made) 
+                VALUES (:po_id, :po_number, :action, :email, :role, :reason, :changes) 
+            """), 
+            { 
+                "po_id": str(po_id), 
+                "po_number": str(po_number), 
+                "action": action, 
+                "email": user_email, 
+                "role": user_role, 
+                "reason": reason, 
+                "changes": changes 
+            } 
+        ) 
+        await db.commit() 
+    except Exception as e: 
+        print(f"Audit log error: {e}") 
 
 async def sync_vendor_credibility(vendor_name: str, db): 
     try: 
@@ -102,6 +154,60 @@ INVALID_PAN_FORMAT = "Invalid PAN format"
 
 # User routes
 user_router = APIRouter()
+
+# Audit routes
+audit_router = APIRouter()
+
+@audit_router.get("/audit-logs") 
+async def get_audit_logs( 
+    action: str = None, 
+    date_from: str = None, 
+    search: str = None, 
+    db: AsyncSession = Depends(get_db), 
+    current_user = Depends(get_current_user) 
+): 
+    # Only admin roles can view 
+    allowed_roles = ["MASTER_ADMIN", "COMPANY_ADMIN", "ADMIN"] 
+    if current_user.role not in allowed_roles: 
+        raise HTTPException(status_code=403, detail="Access denied. Admins only.") 
+    
+    from sqlalchemy import text 
+    query = "SELECT * FROM audit_logs WHERE 1=1" 
+    params = {} 
+    
+    if action and action.lower() != "all": 
+        query += " AND action = :action" 
+        params["action"] = action.upper() 
+    
+    if date_from: 
+        try:
+            from datetime import datetime
+            # Convert string to datetime object for asyncpg/SQLAlchemy
+            dt_val = datetime.fromisoformat(date_from)
+            query += " AND created_at >= :date_from" 
+            params["date_from"] = dt_val 
+        except (ValueError, TypeError):
+            pass
+    
+    if search: 
+        # Detect SQLite vs PostgreSQL
+        is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+        operator = "LIKE" if is_sqlite else "ILIKE"
+        query += f" AND (po_number {operator} :search OR vendor_name {operator} :search OR user_email {operator} :search OR reason {operator} :search)" 
+        params["search"] = f"%{search}%" 
+    
+    query += " ORDER BY created_at DESC LIMIT 500" 
+    
+    result = await db.execute(text(query), params) 
+    rows = result.mappings().all() 
+    
+    logs = [dict(row) for row in rows] 
+    # Convert datetime to string 
+    for log in logs: 
+        if log.get('created_at'): 
+            log['created_at'] = str(log['created_at']) 
+    
+    return {"success": True, "data": logs, "total": len(logs)} 
 
 @user_router.get("/admin/settings")
 async def get_admin_settings(db: AsyncSession = Depends(get_db)):
@@ -525,6 +631,8 @@ async def create_po(req: dict, request: Request, current_user: User = Depends(ge
 
     await sync_vendor_credibility(po.vendor, db)
 
+    reason = req.get("reason", "PO Created") 
+    await log_audit(db, current_user, "CREATE", po, reason=reason) 
     return ResponseFormatter.create_success(data={"id": po.id}, message="PO created")
 
 @po_router.get("")
@@ -539,20 +647,20 @@ async def list_pos(
 ):
     """List user's purchase orders"""
     try:
-        print("LIST_PO REACHED")
         # Support both page/page_size and skip/limit
         if page_size and page_size > 0:
             limit = min(int(page_size), 1000)
         if page and page > 1:
             skip = (int(page) - 1) * limit
+        
         stmt = select(PurchaseOrder).where(PurchaseOrder.company_id == current_user.company_id)
-        print(f"LIST_PO QUERY FOR COMPANY: {current_user.company_id}")
         if not include_archived:
             stmt = stmt.where(PurchaseOrder.archived == False)
         stmt = stmt.order_by(PurchaseOrder.created_at.desc()).offset(skip).limit(limit)
+        
         result = await db.execute(stmt)
         pos = result.scalars().all()
-        print("LIST_PO COUNT:", len(pos))
+        
         rows = [{
             "id": p.id,
             "po_number": p.po_number,
@@ -674,7 +782,7 @@ async def get_po(po_id: str, current_user: User = Depends(get_current_user), db:
     })
 
 @po_router.put("/{po_id}")
-async def update_po(po_id: str, req: dict, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def update_po(po_id: str, req: dict, reason: str = "", current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Update purchase order"""
     if not await AccessControlService.can_access_feature(current_user.id, PO_MANAGEMENT, db):
         raise UnauthorizedFeature(PO_FEATURE_NAME)
@@ -684,6 +792,17 @@ async def update_po(po_id: str, req: dict, current_user: User = Depends(get_curr
     po = result.scalars().first()
     if not po:
         raise HTTPException(status_code=404, detail=PO_NOT_FOUND_ERROR)
+    
+    # Capture old data for audit
+    old_data = {
+        "po_number": po.po_number,
+        "vendor": po.vendor,
+        "gstin": po.gstin,
+        "amount": po.amount,
+        "status": po.status,
+        "due_date": po.due_date.isoformat() if po.due_date else None,
+        "notes": po.notes
+    }
     
     # Update fields
     if po.payment_completed_at is not None:
@@ -805,11 +924,14 @@ async def update_po(po_id: str, req: dict, current_user: User = Depends(get_curr
         pass
 
     await sync_vendor_credibility(po.vendor, db)
+    await write_audit_log(db, po.id, po.po_number, "UPDATE", current_user.email, current_user.role, reason=reason, changes=str(req))
 
+    reason_val = req.get("reason", "PO Updated") 
+    await log_audit(db, current_user, "UPDATE", po, reason=reason_val, new_data=req) 
     return ResponseFormatter.create_success(data={"id": po.id}, message="PO updated successfully")
 
 @po_router.post("/{po_id}/mark-paid")
-async def mark_paid(po_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def mark_paid(po_id: str, req: dict = None, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Mark purchase order as paid (immutable financial action)"""
     role = str(current_user.role or "").upper()
     allowed_roles = {"MASTER_ADMIN", "COMPANY_ADMIN", "FINANCE"}
@@ -871,10 +993,12 @@ async def mark_paid(po_id: str, current_user: User = Depends(get_current_user), 
 
     await sync_vendor_credibility(po.vendor, db)
 
+    reason_val = req.get("reason", "Marked as Paid") if req else "Marked as Paid" 
+    await log_audit(db, current_user, "MARK_PAID", po, reason=reason_val) 
     return ResponseFormatter.create_success(message="Marked as paid")
 
 @po_router.delete("/{po_id}")
-async def delete_po(po_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def delete_po(po_id: str, req: dict = None, reason: str = "", current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Delete purchase order"""
     if not await AccessControlService.can_access_feature(current_user.id, PO_MANAGEMENT, db):
         raise UnauthorizedFeature(PO_FEATURE_NAME)
@@ -885,12 +1009,15 @@ async def delete_po(po_id: str, current_user: User = Depends(get_current_user), 
     if not po:
         raise HTTPException(status_code=404, detail=PO_NOT_FOUND_ERROR)
     
+    reason_val = req.get("reason") if req else "PO Deleted" 
+    await log_audit(db, current_user, "DELETE", po, reason=reason_val) 
+    await write_audit_log(db, po.id, po.po_number, "DELETE", current_user.email, current_user.role, reason=reason_val)
     await db.delete(po)
     await db.commit()
     return ResponseFormatter.create_success(message="PO deleted successfully")
 
 @po_router.post("/{po_id}/archive")
-async def archive_po(po_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def archive_po(po_id: str, req: dict = None, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Archive/unarchive purchase order"""
     stmt = select(PurchaseOrder).where((PurchaseOrder.id == po_id) & (PurchaseOrder.user_id == current_user.id))
     result = await db.execute(stmt)
@@ -901,6 +1028,8 @@ async def archive_po(po_id: str, current_user: User = Depends(get_current_user),
     po.archived = not po.archived
     po.updated_at = datetime.utcnow()
     await db.commit()
+    reason_val = req.get("reason", "PO Archived") if req else "PO Archived" 
+    await log_audit(db, current_user, "ARCHIVE" if po.archived else "UNARCHIVE", po, reason=reason_val) 
     return ResponseFormatter.create_success(data={"is_archived": po.archived}, message="PO archive status updated")
 
 @po_router.post("/{po_id}/send-reminder")

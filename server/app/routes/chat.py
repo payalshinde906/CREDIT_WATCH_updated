@@ -33,7 +33,7 @@ async def chat(req: dict, db: AsyncSession = Depends(get_db)):
                     "prompt": f"You are a credit assistant for CreditDataWatch. {context}\n\nUser: {message}",
                     "stream": False
                 },
-                timeout=30.0
+                timeout=60.0
             )
             
             if response.status_code == 200:

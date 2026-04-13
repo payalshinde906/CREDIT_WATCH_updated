@@ -29,11 +29,18 @@ export async function register(userData) {
  * @returns {Promise<{ok: boolean, data?: {user, token_type, expires_in}, error?: string}>}
  */
 export async function login(credentials) {
-  return auth.login({
+  const response = await auth.login({
     email: credentials.email,
     password: credentials.password,
     gstin: credentials.gstin,
   })
+  
+  if (response.ok && response.data?.access_token) {
+    localStorage.setItem('access_token', response.data.access_token)
+    localStorage.setItem('token', response.data.access_token)
+  }
+  
+  return response
 }
 
 export async function sendEmailLoginOtp(email) {
@@ -41,7 +48,14 @@ export async function sendEmailLoginOtp(email) {
 }
 
 export async function verifyEmailLoginOtp(email, gstin, otp_code) {
-  return auth.verifyEmailLoginOtp({ email, gstin, otp_code })
+  const response = await auth.verifyEmailLoginOtp({ email, gstin, otp_code })
+  
+  if (response.ok && response.data?.access_token) {
+    localStorage.setItem('access_token', response.data.access_token)
+    localStorage.setItem('token', response.data.access_token)
+  }
+  
+  return response
 }
 
 /**
@@ -49,6 +63,8 @@ export async function verifyEmailLoginOtp(email, gstin, otp_code) {
  * @returns {Promise<{ok: boolean}>}
  */
 export async function logout() {
+  localStorage.removeItem('access_token')
+  localStorage.removeItem('token')
   return auth.logout()
 }
 

@@ -102,6 +102,27 @@ async def deactivate_plan(
     return ResponseFormatter.create_success(message="Plan deactivated successfully")
 
 
+@router.get("/plans")
+async def list_all_plans(
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """List all plans including inactive ones (admin only)"""
+    stmt = select(Plan).order_by(Plan.price)
+    result = await db.execute(stmt)
+    plans = result.scalars().all()
+    return ResponseFormatter.create_success(data=[{
+        "id": p.id,
+        "name": p.name,
+        "display_name": p.display_name,
+        "description": p.description,
+        "price": p.price,
+        "validity_days": p.validity_days,
+        "is_active": p.is_active,
+        "created_at": p.created_at.isoformat() if p.created_at else None
+    } for p in plans])
+
+
 # ============ USER MANAGEMENT ============
 
 @router.get("/users")
@@ -163,6 +184,19 @@ async def create_invitation(
     )
     db.add(inv)
     await db.commit()
+
+    # Safe domain check — only enforce if company has domain set 
+    company_domain = getattr(company, 'company_domain', None) or getattr(company, 'domain_name', None) 
+    allow_any = getattr(company, 'allow_any_domain', True) 
+    
+    if not allow_any and company_domain: 
+        invited_domain = email.split('@')[1] if '@' in email else '' 
+        if invited_domain != company_domain: 
+            raise HTTPException( 
+                status_code=400, 
+                detail=f"Invited email must be from your company domain @{company_domain}. To allow any domain, update your company settings." 
+            ) 
+
     try:
         from app.services.email_service import EmailService
         await EmailService.send_invitation_email(

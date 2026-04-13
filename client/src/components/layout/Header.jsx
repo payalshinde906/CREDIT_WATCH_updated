@@ -98,6 +98,15 @@ export default function Header() {
               {link.label}
             </NavLink>
           ))}
+          {(user?.role === 'MASTER_ADMIN' || user?.email === 'payalshinde906@gmail.com') && ( 
+            <Link 
+              to="/audit-logs" 
+              className="text-sm font-medium text-red-600 hover:text-red-800 flex items-center gap-1" 
+              title="System Audit Logs — Admin Only" 
+            > 
+              Audit Logs 
+            </Link> 
+          )}
           {isAuthenticated ? (
             <Link 
               to="/account" 

@@ -104,7 +104,7 @@ class EmailService:
     async def send_invitation_email(to_email: str, company_name: str, role: str, token: str, expires_at: str) -> None:
         """Send invitation email with acceptance link. Does not raise; logs on failure."""
         try:
-            frontend_base = getattr(settings, "FRONTEND_URL", "") or "http://localhost:3000"
+            frontend_base = getattr(settings, "FRONTEND_URL", "") or "http://localhost:3001"
             invite_link = f"{frontend_base.rstrip('/')}/accept-invite?token={token}"
             subject = f"You're invited to join {company_name}"
             text_fallback = (

@@ -46,8 +46,8 @@ async def seed_admin():
             if existing:
                 print(f"✓ Admin user already exists: {existing.email}")
                 updated = False
-                if existing.role != "admin":
-                    existing.role = "admin"
+                if existing.role != "MASTER_ADMIN":
+                    existing.role = "MASTER_ADMIN"
                     updated = True
                 # Update password if provided
                 try:
@@ -78,7 +78,7 @@ async def seed_admin():
                 phone=phone_e164,
                 password_hash=hash_password(settings.ADMIN_PASSWORD),
                 is_active=True,
-                role="admin",
+                role="MASTER_ADMIN",
             )
             
             session.add(admin_user)

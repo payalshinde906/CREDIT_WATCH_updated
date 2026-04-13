@@ -46,6 +46,7 @@ import CMSPageRenderer from '../components/cms/CMSPageRenderer'
 import ProtectedRoute from '../components/ProtectedRoute'
 import CredibilityIndex from '../pages/CredibilityIndex'
 import CredibilityDetail from '../pages/CredibilityDetail'
+import AuditLogs from '../pages/AuditLogs'
 
 export default function AppRoutes() {
   return (
@@ -139,6 +140,15 @@ export default function AppRoutes() {
             element={(
               <ProtectedRoute requiredRole="MASTER_ADMIN">
                 <AdminSettings />
+              </ProtectedRoute>
+            )}
+          />
+
+          <Route
+            path="/audit-logs"
+            element={(
+              <ProtectedRoute requiredRole="MASTER_ADMIN">
+                <AuditLogs />
               </ProtectedRoute>
             )}
           />
