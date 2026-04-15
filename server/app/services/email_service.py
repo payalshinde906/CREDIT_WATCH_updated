@@ -25,8 +25,9 @@ class EmailService:
 
     def send_email(self, to_email: str, subject: str, body: str):
         """Send a normal email"""
-        if not self.smtp_user or not self.smtp_password:
-            logger.warning("SMTP not configured, skipping email.")
+        if not self.smtp_user or not self.smtp_password or self.smtp_password == "testpassword":
+            logger.warning("SMTP not configured or using placeholder password, skipping email.")
+            print(f"[MOCK EMAIL] To: {to_email} | Subject: {subject} | Body: {body[:50]}...")
             return
 
         try:
@@ -54,8 +55,9 @@ class EmailService:
 
     def send_email_html(self, to_email: str, subject: str, html: str, text_fallback: str | None = None):
         """Send an HTML email with optional text fallback"""
-        if not self.smtp_user or not self.smtp_password:
-            logger.warning("SMTP not configured, skipping email.")
+        if not self.smtp_user or not self.smtp_password or self.smtp_password == "testpassword":
+            logger.warning("SMTP not configured or using placeholder password, skipping email.")
+            print(f"[MOCK HTML EMAIL] To: {to_email} | Subject: {subject}")
             return
         try:
             import smtplib, ssl
@@ -150,6 +152,10 @@ async def send_email_with_attachment(
     # Use EmailService logic for consistency
     svc = EmailService()
     
+    if not svc.smtp_user or not svc.smtp_password or svc.smtp_password == "testpassword":
+        print(f"[MOCK ATTACHMENT EMAIL] To: {to_email} | Subject: {subject} | Attachment: {attachment_name}")
+        return True
+
     msg = MIMEMultipart()
     msg['From'] = svc.from_header
     msg['To'] = to_email

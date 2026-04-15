@@ -94,8 +94,8 @@ export default function Dashboard() {
   const fetchDashboardData = async () => {
     setLoadingData(true)
     try {
-      // Use shorter timeouts for dashboard summary stats
-      const opt = { timeout: 8000 }
+      // Use longer timeouts for dashboard summary stats
+      const opt = { timeout: 20000 }
       const [posRes, invoicesRes, defaultersRes, reportsRes, settlementsRes, appointmentsRes, remindersRes, walletRes] = await Promise.all([
         purchaseOrders.list(1, 10, false, opt),
         invoices.list({ limit: 10 }, opt),

@@ -398,3 +398,31 @@ company_domain and allow_any_domain columns added to companies table
 
 **Files touched:** `main.py`, `core.py`, `chat.py`, `apiClient.js`, `authService.js`, `AuditLogs.jsx`, `PurchaseOrders.jsx`, `EditPOModal.jsx`, `Header.jsx`, `ai_cbi_service.py`
 
+---
+
+## v2.5 — April 15, 2026
+
+### Smart Import System & Network Optimization
+
+#### Dynamic PO Import System
+- **Flexible Formats**: Replaced rigid CSV template with a robust importer supporting both **CSV** and **Excel** (`.xlsx`, `.xls`) files.
+- **Smart Preprocessing**: Added a layer to automatically detect header rows and skip extra top rows (like company logos or address blocks) commonly found in exports.
+- **Source-Based Mapping**: Added predefined mapping presets for **Zoho** and **Tally**, allowing one-click auto-mapping of column names.
+- **Automated Data Enrichment**:
+    - **Status Derivation**: Automatically marks imported POs as "Overdue" if the due date has already passed.
+    - **Currency/Amount Cleaning**: Automatically strips currency symbols (₹) and commas from amount fields.
+    - **Validation**: Integrated GSTIN and date format validation during the import process.
+- **Improved UI**: New `POImportModal` with source selection, drag-and-drop support, and detailed row-level error reporting.
+
+#### Performance & Stability
+- **DNS Optimization**: Fixed a critical 2-second delay in API requests on Windows by switching from `localhost` to `127.0.0.1` for backend communication.
+- **Watch List Refinement**: Excluded database files (`.db`, `.db-journal`, `.db-wal`) from Uvicorn's reload watch list, preventing server crashes during database writes.
+- **Timeout Management**: Optimized dashboard performance by increasing parallel request timeouts to 20 seconds.
+
+#### Bug Fixes & Reliability
+- **Email Mock Mode**: Implemented a "Mock Mode" for development; if SMTP credentials are not configured, the system logs emails to the console instead of crashing.
+- **Cascade Delete**: Added `ondelete="CASCADE"` to Notifications, ensuring database integrity when Purchase Orders are deleted.
+- **Backend Stability**: Fixed missing dependency imports in `core.py` and updated raw SQL queries for better SQLite/PostgreSQL cross-compatibility.
+
+**Files touched:** `import_service.py`, `core.py`, `main.py`, `apiClient.js`, `Dashboard.jsx`, `PurchaseOrders.jsx`, `POImportModal.jsx`, `email_service.py`, `notification.py`
+

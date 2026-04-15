@@ -3,7 +3,7 @@ const API_BASE_URL = (() => {
   let u = (RAW_BASE || '').trim()
   if (!u) return '/api/v1'
   if (u.startsWith('/')) return u.replace(/\/+$/, '')
-  if (u.startsWith(':')) u = 'http://localhost' + u
+  if (u.startsWith(':')) u = 'http://127.0.0.1' + u
   if (!u.startsWith('http://') && !u.startsWith('https://')) u = 'http://' + u
   if (!/\/api\/v1\/?$/.test(u)) {
     if (u.endsWith('/')) u += 'api/v1'
@@ -39,7 +39,7 @@ async function apiRequest(endpoint, options = {}) {
     credentials: 'include', // Send cookies with every request
     signal: signal,
     headers: {
-      'Content-Type': 'application/json',
+      ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
       ...options.headers,
     },
     ...options,
@@ -210,6 +210,12 @@ export const user = {
 
 export const purchaseOrders = {
   create: (data) => apiRequest('/purchase-orders', { method: 'POST', body: JSON.stringify(data) }),
+  bulkImport: (formData) => apiRequest('/purchase-orders/bulk-import-upload', { 
+    method: 'POST', 
+    body: formData,
+    // Note: Don't set Content-Type header; fetch will automatically set it to multipart/form-data with boundary
+    headers: {} 
+  }),
   list: (page = 1, pageSize = 20, includeArchived = false, opt = {}) => apiRequest(`/purchase-orders?page=${page}&page_size=${pageSize}&include_archived=${includeArchived}`, opt),
   get: (id) => apiRequest(`/purchase-orders/${id}`),
   update: (id, data) => apiRequest(`/purchase-orders/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

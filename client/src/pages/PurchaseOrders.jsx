@@ -3,7 +3,7 @@ import { purchaseOrders, sendPOReminder, admin } from '../services/api/apiClient
 import { isValidGstin } from '../utils/validation'
 import { useAuth } from '../state/authContext'
 import EditPOModal from '../components/po/EditPOModal'
-import CSVImportModal from '../components/po/CSVImportModal'
+import POImportModal from '../components/po/POImportModal'
 import ReminderModal from '../components/po/ReminderModal'
 import { formatE164 } from '../utils/phone'
 import LoadingSpinner from '../components/common/LoadingSpinner'
@@ -443,20 +443,17 @@ export default function PurchaseOrders() {
         setRows(res.data)
       }
       setLoading(false)
-      setStatusMessage('CSV import completed.')
+      setStatusMessage('Import completed.')
       window.dispatchEvent(new Event('poChanged'))
     }
 
     const downloadTemplate = () => {
       const headers = [
-        'number','vendor_name','vendor_gstin',
-        'vendor_email','vendor_phone','amount',
-        'due_date','status','document_url'
+        'PO #', 'Vendor', 'Email', 'Mobile', 'GSTIN', 'Amount', 'Due', 'Payment Window', 'Status'
       ]
       const example = [
-        'PO-2026-01','Test Vendor','22AAAAA0000A1Z5',
-        'vendor@email.com','+919876543210',
-        '50000','2026-04-01','Open',''
+        'PO-2026-01', 'Test Vendor', 'vendor@email.com', '9876543210', '22AAAAA0000A1Z5',
+        '50000', '2026-04-01', '50', 'Open'
       ]
       const csv = [headers.join(','), example.join(',')].join('\n')
       const blob = new Blob([csv], { type: 'text/csv' })
@@ -553,9 +550,9 @@ export default function PurchaseOrders() {
                   <button
                     onClick={() => setShowCSVImport(true)}
                     className="text-sm px-3 py-1 rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100 transition-colors font-medium"
-                    title="Import from CSV"
+                    title="Bulk import from CSV or Excel"
                   >
-                    Import CSV
+                    Bulk Import
                   </button>
                 )}
               </div>
@@ -976,7 +973,7 @@ export default function PurchaseOrders() {
           )}
 
           {showCSVImport && (
-            <CSVImportModal
+            <POImportModal
               onClose={() => setShowCSVImport(false)}
               onImportComplete={handleImportComplete}
             />

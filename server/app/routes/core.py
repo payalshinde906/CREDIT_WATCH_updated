@@ -1,7 +1,7 @@
 """
 User and feature routes (stub with core endpoints)
 """
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Depends, Request, HTTPException, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -389,6 +389,46 @@ async def get_subscription(current_user: User = Depends(get_current_user), db: A
 
 # Purchase Order routes
 po_router = APIRouter()
+
+@po_router.post("/bulk-import")
+async def bulk_import_pos(
+    file: Request,
+    source: str = "default",
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Bulk import purchase orders from CSV/Excel"""
+    from app.services.import_service import POImportService
+    
+    # Re-parse as multipart if needed, but for simplicity let's use standard FastAPI upload in the next step
+    # I'll update the signature to use UploadFile
+    pass
+
+@po_router.post("/bulk-import-upload")
+async def bulk_import_pos_upload(
+    file: UploadFile = File(...),
+    source: str = Form("default"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Bulk import purchase orders from CSV/Excel"""
+    from app.services.import_service import POImportService
+    
+    if not await AccessControlService.can_access_feature(current_user.id, PO_MANAGEMENT, db):
+        raise UnauthorizedFeature(PO_FEATURE_NAME)
+        
+    content = await file.read()
+    file_type = "csv" if file.filename.endswith(".csv") else "excel"
+    
+    results = await POImportService.process_file(
+        file_content=content,
+        file_type=file_type,
+        source=source,
+        db=db,
+        current_user=current_user
+    )
+    
+    return ResponseFormatter.create_success(data=results, message="Import completed")
 
 @po_router.post("")
 async def create_po(req: dict, request: Request, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
